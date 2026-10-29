@@ -18,6 +18,7 @@ API:
     main(argv)                     -> exit status
 """
 import argparse
+import os
 import re
 import sys
 
@@ -94,7 +95,7 @@ def main(argv=None):
     if not re.fullmatch(r"[A-Za-z_]\w*", args.name):
         ap.error("--name must be a valid C identifier")
     w, h, words = convert(args.png, args.bg)
-    write_header(args.header, args.name, args.png.rsplit("/", 1)[-1], w, h, words)
+    write_header(args.header, args.name, os.path.basename(args.png), w, h, words)
     return 0
 
 
