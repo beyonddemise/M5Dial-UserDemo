@@ -18,8 +18,12 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    on Apple Silicon without Rosetta, universal-ctags; those are global. Downloaded wokwi-cli and
    wasi-sdk are verified against the sha256 pins in deps.txt.
    Every tool script sources `tools/env.sh`, so no shell activation is needed afterwards.
-3. **Apple Silicon without Rosetta:** setup.sh swaps arduino-cli's bundled x86_64 `ctags` for
-   `universal-ctags` (Homebrew); otherwise builds fail with `bad CPU type in executable`.
+3. **Apple Silicon without Rosetta:** arduino-cli's bundled `ctags` is x86_64 (builds fail with
+   `bad CPU type in executable`), so setup.sh replaces it with `tools/ctags-compat.sh`, a
+   wrapper around Homebrew `universal-ctags` that rewrites its output into the format
+   arduino-cli's .ino prototype generator expects (raw universal-ctags silently puts
+   `setup(); loop();` inside `setup()`, which recurses at boot). Re-run setup.sh after pulling
+   changes to that wrapper; `tools/tests/test_ctags_compat.py` fails if the install is stale.
 4. **Back up the factory flash (once, before any upload):** connect the M5Dial via USB-C, then
    `sketch/tools/backup_flash.sh`. It writes `sketch/backup/m5dial-factory-<date>.bin`
    (exactly 8 388 608 bytes) plus `.sha256`, written as `.partial` and renamed only once verified.
