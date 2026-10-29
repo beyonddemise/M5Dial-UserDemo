@@ -46,3 +46,28 @@
 #ifndef GUI_FONT_CN_SMALL
 #define GUI_FONT_CN_SMALL (&fonts::efontCN_16_b)
 #endif
+
+/**
+ * Wi-Fi credentials of the factory test, from the sketch's git-ignored secrets.h if present
+ * (copy UserDemo/secrets.example.h), otherwise placeholders, so a fresh clone and CI build
+ * without it. M5DD_HAVE_SECRETS tells which case applied (1 = secrets.h found).
+ * why here, in a library header: arduino-cli puts the sketch folder on the include path of the
+ * sketch *and* of every library source (`-I<sketch dir>` comes first in the verbose build), so
+ * `__has_include("secrets.h")` finds the sketch's file from any translation unit. The host
+ * tests (-Isrc only) and the example sketches have none and get the placeholders.
+ */
+#if defined(__has_include)
+#if __has_include("secrets.h")
+#include "secrets.h"
+#define M5DD_HAVE_SECRETS 1
+#endif
+#endif
+#ifndef M5DD_HAVE_SECRETS
+#define M5DD_HAVE_SECRETS 0
+#endif
+#ifndef FACTORY_TEST_WIFI_SSID
+#define FACTORY_TEST_WIFI_SSID "your-ssid"
+#endif
+#ifndef FACTORY_TEST_WIFI_PASSWORD
+#define FACTORY_TEST_WIFI_PASSWORD "your-password"
+#endif

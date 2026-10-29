@@ -11,7 +11,11 @@ M5DIAL_CORE_VERSION=3.3.10
 M5DIAL_FQBN=m5stack:esp32:m5stack_dial
 # why: board default is CDCOnBoot=Disabled (boards.txt m5stack_dial.menu.CDCOnBoot.default),
 # which leaves Serial/M5_LOG off the native USB port. Appended to the FQBN by env.sh.
-M5DIAL_FQBN_OPTIONS=CDCOnBoot=cdc
+# why FlashSize=8M,PartitionScheme=huge_app: the M5Dial has 8 MB flash, but the board default
+# is a 4 MB layout with a 1.25 MB app; UserDemo (efontCN_24 alone is 550 KB, plus Wi-Fi and
+# BLE later) needs more. huge_app = 3 MB app, no OTA (the original firmware used a 4 MB
+# factory app, no OTA either).
+M5DIAL_FQBN_OPTIONS=CDCOnBoot=cdc,FlashSize=8M,PartitionScheme=huge_app
 
 # --- Arduino libraries (name@version, quoted: values contain spaces; lvgl is 9.x) ---------------------------
 LIB_M5DIAL="M5Dial@1.0.3"
