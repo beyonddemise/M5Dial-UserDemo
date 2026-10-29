@@ -21,6 +21,7 @@
 #include "../lcd_test/app_lcd_test.h"
 #include "../rtc_test/app_rtc_test.h"
 #include "../set_brightness/app_set_brightness.h"
+#include "../temp_demo/app_temp_demo.h"
 #include "launcher_layout.h"
 #include "launcher_render_callback.hpp"
 
@@ -265,7 +266,8 @@ void Launcher::_app_open_callback(uint8_t selectedNum)
             break;
         case 5:  // MOONCAKE::USER_APP::BLE_Server
             break;
-        case 6:  // MOONCAKE::USER_APP::TempDemo (upstream VideoShit)
+        case launcher_layout::SLOT_TEMP_DEMO:  // upstream VideoShit
+            app_ptr = new MOONCAKE::USER_APP::TempDemo;
             break;
         case 7:  // MOONCAKE::USER_APP::MoreMenu
             break;

@@ -405,3 +405,25 @@ with `<Class>` = `setAppName()` = the C++ class name.
   short of the target. The port writes whenever the animated value changes; `getValue()` returns
   the end value once the animation is over, so the backlight lands exactly on the target.
 - As upstream, the value is kept when the app quits (not restored).
+
+### Temp demo (`TempDemo`, upstream `VideoShit`, Task 10)
+
+| Original (`_data.hal->...`)                              | Port                                                          |
+|----------------------------------------------------------|---------------------------------------------------------------|
+| `VideoShit`, `VIDEO_SHIT::Data_t`, `GUI_VideoShit`, name "Video Shit" | `TempDemo`, `TEMP_DEMO::Data_t`, `GUI_TempDemo`, name "TempDemo" |
+| `HAL::HAL*` user data                                    | `AppContext*` (`getUserData()`)                               |
+| `encoder.wasMoved(true)` + `getDirection() < 1` → `tempUp()`, `delay(100)` | `m5dd::readDetentsWithClick(_detent)` → `stepTarget(steps)` (`temp_demo_target::step`, clamped), no delay |
+| `!encoder.btn.read()` + hold loop                        | `m5dd::buttonClicked()`                                       |
+| `tp.isTouched()` → `buttonPressed()`, `while (tp.isTouched()) delay(5)`, `buttonReleased()` | same on `M5Dial.Touch.getDetail().isPressed()`, `M5Dial.update()` in the wait |
+| `delay`/`millis` macros (FreeRTOS / esp_timer)           | Arduino `delay()` / `millis()`                                |
+| `printf("[%s] onCreate")`, `printf("%d", _temp)`         | `app: open TempDemo`, `temp: target=<C>`, `temp: frame` per redraw |
+| `gui/temp_demo_icons/*.h` (own copy)                     | the library's `assets/temp_demo_icons/*.h`; the image tables live in `gui_temp_demo.cpp` only |
+
+- `temp: target=<n>` is the temperature the image shows: index 0..8 = temp_demo_1..9 =
+  19..27 C, start index 3 = 22 C. It is logged on open and when the value changes; a clamped
+  step logs only `temp: frame`.
+- `temp: frame` is logged after every redraw. The app redraws only on input (knob, touch press
+  and release), so the rate stays at a few lines per second. `onCreate()` redraws once so the
+  first frame is logged after `app: open`.
+- The "SET" button shows `temp_demo_button_released` while pressed and `..._pressed` otherwise,
+  as upstream (the two images differ only slightly).
