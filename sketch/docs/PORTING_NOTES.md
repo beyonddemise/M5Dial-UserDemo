@@ -169,13 +169,13 @@ turns. The diagram therefore has no KY-040 (both would drive GPIO40/41).
 With A on GPIO41 (`ENCODER` pin1) leading B on GPIO40, PJRC's state table counts down: from rest
 (both high) A falls -> state `1011b` -> `position--` (Encoder.h `update()`), so one clockwise detent
 gives raw `-4`. DialProbe prints `steps = detents * M5DD_ENCODER_CW_SIGN` with `-1`, so clockwise
-logs `enc: steps=1 raw=-4`. The `encoder.test.yaml` scenario is the check in the simulator; which
+logs `enc: steps=1 raw=-4`. The encoder steps of `probe.test.yaml` are the check in the simulator; which
 physical direction is "A leads" on the real knob is confirmed in Task 19's physical check.
 
 ### DialProbe
 
-`examples/DialProbe` replaces Task 1/2's Smoke sketch (its scenario became `init.test.yaml`).
-It logs `init: display WxH`, `init: rtc|touch|rfid ok|fail` (RTC: `Rtc.isEnabled()`; touch: VENDID
+`examples/DialProbe` replaces Task 1/2's Smoke sketch; Smoke's `board: 12` check became `init: board 12`.
+It logs `init: board <n>` (12 = M5Dial, i.e. the panel was autodetected), `init: display WxH`, `init: rtc|touch|rfid ok|fail` (RTC: `Rtc.isEnabled()`; touch: VENDID
 `A8h` non-zero; RFID: VersionReg not 00h/FFh), `probe: ready`, then `enc:`, `btn:`, `touch:`,
 `rtc:` (1 Hz) and `rfid: uid=` (card halted after each read, so it is logged once per presentation).
 The encoder is polled in the loop. An RFID poll without a card blocks the loop for the reader's
@@ -189,8 +189,27 @@ external) and ties the RFID/touch RST inputs high.
 
 ### CI
 
-`sim.yml` runs every `sim/scenarios/<Sketch>/*.test.yaml` against `examples/<Sketch>` (or `<Sketch>`),
-with 20 s of simulated time per scenario, one retry only for Wokwi transport error 1006, and an
-abort when the Wokwi CI-minute quota is used up. The first run of this task (40954686971) used the
-old 60 s limit: one hanging scenario held the session for 5 minutes of wall time (Wokwi's free-plan
-session limit) and used up the monthly free CI minutes.
+- **Triggers (Wokwi minutes are a monthly quota):**
+  - job `chips` (chip host tests, no Wokwi) runs on pushes to `port/**` that touch `sketch/sim/chips/**`;
+  - job `scenario` runs only on `workflow_dispatch` and on pull requests (opened, synchronize,
+    ready_for_review) that touch `sketch/sim/**`, `sketch/examples/**`, `sketch/libraries/M5DialDemo/**`,
+    `sketch/UserDemo/**` or the workflow, and only for same-repo PRs, so fork PRs never get `WOKWI_CLI_TOKEN`;
+  - `concurrency` per ref with cancel-in-progress, so a newer commit stops the older run.
+- **One Wokwi session per sketch:** DialProbe's checks (init, RTC, button, touch, encoder, RFID) are
+  the steps of one scenario, `sim/scenarios/DialProbe/probe.test.yaml`. The loop runs every
+  `sim/scenarios/<Sketch>/*.test.yaml` against `examples/<Sketch>` (or `<Sketch>`).
+- **Bounds:** 20 s of simulated time per scenario. It retries once, and only when the output contains
+  Wokwi's transport-drop text ("Connection to transport closed unexpectedly", code 1006). It aborts
+  everything when Wokwi reports the CI-minute quota as used up.
+- **History:** the first run of this task (40954686971) used a 60 s limit and six separate scenarios.
+  One scenario waited for a line that never came until Wokwi's 5-minute wall-clock session limit,
+  and that used up the monthly free quota.
+- **No display check:** no `frameLog` / `expect-chip-output` check is in the combined scenario.
+  The step does not pause the simulation and must be last. DialProbe's last frame is not uniform (it
+  shows text), and its only frames come before `probe: ready`. `init: board 12` covers panel
+  autodetection instead.
+
+### Touch coordinates
+
+The `ft3267` chip's `x`/`y` controls cover the controller's 12-bit range (0-4095). The M5Dial
+panel reports 0-239 (M5GFX.cpp:1977-1980 `x_max = y_max = 239`), so scenarios use that range.

@@ -1,26 +1,52 @@
 # Runs the Arduino port's Wokwi scenarios on the virtual M5Dial (sketch/sim).
 # Early subset of the full CI (Task 17 extends this: host tests, build matrix).
-# Runs every scenario under sketch/sim/scenarios/<Sketch>/*.test.yaml against the
-# sketch examples/<Sketch> (or <Sketch> for top-level sketches such as UserDemo).
+# Job `chips`: chip host tests (no Wokwi) - on every push to port/** for early feedback.
+# Job `scenario`: every sketch/sim/scenarios/<Sketch>/*.test.yaml against examples/<Sketch>
+# (or <Sketch>, e.g. UserDemo) - only on workflow_dispatch and same-repo pull requests,
+# because each scenario costs Wokwi CI minutes (free-plan monthly quota).
 name: sim
 
 on:
   workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    paths:
+      - 'sketch/sim/**'
+      - 'sketch/examples/**'
+      - 'sketch/libraries/M5DialDemo/**'
+      - 'sketch/UserDemo/**'
+      - '.github/workflows/sim.yml'
   push:
     branches: ['port/**']
     paths:
-      - 'sketch/**'
+      - 'sketch/sim/chips/**'
       - '.github/workflows/sim.yml'
 
 permissions:
   contents: read
 
+# why: a newer run for the same ref supersedes the old one (no Wokwi minutes for stale commits)
 concurrency:
   group: sim-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  chips:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Chip host tests
+        # why: native cc + python3 only; the wasm builds run in the scenario job (needs wasi-sdk)
+        run: for m in sketch/sim/chips/*/Makefile; do make -C "$(dirname "$m")" test; done
+
   scenario:
+    needs: chips
+    # why: never on push (quota); on PRs only from this repo, so fork PRs never see the token
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -51,9 +77,6 @@ jobs:
       - name: Setup toolchain
         run: sketch/tools/setup.sh
 
-      - name: Chip host tests
-        run: for m in sketch/sim/chips/*/Makefile; do make -C "$(dirname "$m")" test; done
-
       - name: Tool unit tests
         # why: covers sim_ci.sh retry/quota verdicts, which the scenario step cannot when Wokwi is unavailable
         run: sketch/tools/.venv/bin/python -m unittest discover sketch/tools/tests
@@ -65,10 +88,11 @@ jobs:
         # why: every scenario finishes within a few simulated seconds; 20 s of simulated time
         # bounds the wall time a hanging scenario can burn from the Wokwi CI minute quota.
         # One tools/sim_ci.sh call for all scenarios (verdict logic unit-tested in
-        # tools/tests/test_sim_ci.py): retries only for Wokwi transport drops (error 1006), never
-        # for a real failure. A used-up quota marks this and the remaining scenarios SKIPPED
-        # (warning + step summary) without failing the job - a billing condition, not a test
-        # result. All other scenarios run even if one fails; the step fails if any scenario failed.
+        # tools/tests/test_sim_ci.py). Retries: only for Wokwi transport drops ("Connection to
+        # transport closed unexpectedly: code 1006"), never for a real failure. A used-up quota
+        # marks this and the remaining scenarios SKIPPED (warning + step summary) without failing
+        # the job: a billing condition, not a test result. All other scenarios run even if one
+        # fails; the step fails if any scenario failed.
         run: |
           pairs=()
           for scenario in sim/scenarios/*/*.test.yaml; do

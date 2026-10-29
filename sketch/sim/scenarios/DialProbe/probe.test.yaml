@@ -1,0 +1,53 @@
+# DialProbe on the virtual M5Dial: every peripheral in one Wokwi session (one session per
+# sketch keeps the Wokwi CI-minute cost down).
+# Run: tools/sim.sh examples/DialProbe sim/scenarios/DialProbe/probe.test.yaml
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, touch = ft3267, rtc = pcf8563,
+# rfid = ws1850s, enc = encoder chip on GPIO41 (A) / GPIO40 (B).
+name: 'DialProbe: all peripherals'
+version: 1
+steps:
+  # --- init: board autodetect + every probe answers
+  # why: m5::board_t::board_M5Dial == 12 (M5GFX src/lgfx/boards.hpp:23), proves the display chip
+  - wait-serial: 'init: board 12'
+  - wait-serial: 'init: display 240x240'
+  - wait-serial: 'init: rtc ok'
+  - wait-serial: 'init: touch ok'
+  - wait-serial: 'init: rfid ok'
+  - wait-serial: 'probe: ready'
+
+  # --- rtc: starts from the host's UTC time (20xx) and ticks; DialProbe logs it at 1 Hz
+  - wait-serial: 'rtc: 20'
+  - wait-serial: 'rtc: 20'
+
+  # --- button: press and release edges (active low)
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - wait-serial: 'btn: pressed'
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'btn: released'
+
+  # --- touch at (120, 60)
+  - set-control: { part-id: touch, control: x, value: 120 }
+  - set-control: { part-id: touch, control: y, value: 60 }
+  - set-control: { part-id: touch, control: touched, value: 1 }
+  - wait-serial: 'touch: x=120 y=60'
+  - set-control: { part-id: touch, control: touched, value: 0 }
+
+  # --- encoder: one clockwise detent -> steps=1, one counter-clockwise -> steps=-1
+  # `steps` emits that many detents (positive = clockwise, A leads B); 0 re-arms it.
+  # why: edgeIntervalUs 40 ms - DialProbe polls the encoder (no interrupts until Task 4) and an
+  # RFID poll without a card blocks its loop for the 25 ms reader timeout.
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'enc: steps=1 '
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: -1 }
+  - wait-serial: 'enc: steps=-1 '
+
+  # --- rfid: card DE:AD:BE:EF (REQA, CL1 anticollision, SELECT)
+  - set-control: { part-id: rfid, control: uid0, value: 222 }
+  - set-control: { part-id: rfid, control: uid1, value: 173 }
+  - set-control: { part-id: rfid, control: uid2, value: 190 }
+  - set-control: { part-id: rfid, control: uid3, value: 239 }
+  - set-control: { part-id: rfid, control: card_present, value: 1 }
+  - wait-serial: 'rfid: uid=DE:AD:BE:EF'
