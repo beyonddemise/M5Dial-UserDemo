@@ -17,6 +17,7 @@
 #include <esp_heap_caps.h>
 
 #include "../../dial_encoder.h"
+#include "../lcd_test/app_lcd_test.h"
 #include "launcher_layout.h"
 #include "launcher_render_callback.hpp"
 
@@ -93,7 +94,7 @@ void Launcher::_icon_list_init()
     for (size_t i = 0; i < icon_list.size(); i++)
     {
         /* Set colors */
-        icon_list[i].color = icon_color_list[i];
+        icon_list[i].color = launcher_layout::appColor(static_cast<int>(i));
 
         /* Set tags */
         icon_list[i].tag_up = icon_tag_list[i * 2];
@@ -246,11 +247,12 @@ void Launcher::_app_open_callback(uint8_t selectedNum)
     MOONCAKE::APP_BASE* app_ptr = nullptr;
 
     /* Create app */
-    // why every case is empty: each app is added here as its port lands (original class in
+    // why some cases are empty: each app is added here as its port lands (original class in
     // the comment); until then the entry logs `app: <name> not ported` below.
     switch (selectedNum)
     {
-        case 0:  // MOONCAKE::USER_APP::LCD_Test
+        case launcher_layout::SLOT_LCD_TEST:
+            app_ptr = new MOONCAKE::USER_APP::LCD_Test;
             break;
         case 1:  // MOONCAKE::USER_APP::RTC_Test
             break;

@@ -84,3 +84,17 @@ HOST_TEST(app_names_cover_icons_and_empty_slots) {
     HT_EQ(0, std::strcmp("-", appName(9)));
     HT_EQ(0, std::strcmp("-", appName(-1)));
 }
+
+HOST_TEST(app_colors_match_original_icon_colors) {
+    // original launcher_render_callback.hpp icon_color_list; standalone sketches use the same
+    HT_EQ(0xFD5C4C, appColor(SLOT_LCD_TEST));
+    HT_EQ(0x577EFF, appColor(SLOT_RTC_TEST));
+    HT_EQ(0x03A964, appColor(SLOT_RFID_TEST));
+    HT_EQ(0x1AA198, appColor(SLOT_BRIGHTNESS));
+    HT_EQ(0xEB8429, appColor(SLOT_WIFI_SCAN));
+    HT_EQ(0x04A279, appColor(SLOT_BLE_SERVER));
+    HT_EQ(0x008CD6, appColor(SLOT_TEMP_DEMO));
+    HT_EQ(0x5D7BA2, appColor(SLOT_MORE_MENU));
+    HT_EQ(0, appColor(8));   // empty slots: black
+    HT_EQ(0, appColor(-1));
+}

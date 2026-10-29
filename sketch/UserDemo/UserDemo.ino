@@ -9,7 +9,8 @@
  * Optional secrets.h (git-ignored, `cp secrets.example.h secrets.h`): Wi-Fi credentials for the
  * factory test, picked up by M5DialDemo's config.h if present.
  * Scenario: sim/scenarios/UserDemo/launcher.test.yaml. Log lines: `boot: UserDemo`,
- * `launcher: ready`, `launcher: select <index> <name>`, `app: <name> not ported`.
+ * `launcher: ready`, `launcher: select <index> <name>`, `app: open <Class>` / `app: close <Class>`
+ * (ported apps), `app: <name> not ported`.
  */
 #include <M5DialDemo.h>
 #include <apps/launcher/launcher.h>

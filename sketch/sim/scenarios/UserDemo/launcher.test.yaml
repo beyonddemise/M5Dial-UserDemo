@@ -5,8 +5,9 @@
 # Parts (sim/diagram.json): btn = front button GPIO42, touch = ft3267, enc = encoder chip on
 # GPIO41 (A) / GPIO40 (B). `enc.steps` emits that many detents (positive = clockwise), 0 re-arms.
 # Launcher slots (launcher_layout.h): 0 LcdTest, 1 RtcTest, 2 RfidTest, 3 Brightness,
-# 4 WifiScan, 5 BleServer, 6 TempDemo, 7 MoreMenu, 8/9 empty ("-"). No app is ported yet, so
-# opening one logs `app: <name> not ported` and returns to the launcher.
+# 4 WifiScan, 5 BleServer, 6 TempDemo, 7 MoreMenu, 8/9 empty ("-"). Ported apps log
+# `app: open <Class>` / `app: close <Class>`; an entry not ported yet logs
+# `app: <name> not ported`; either way the launcher logs `launcher: ready` when back.
 name: 'UserDemo: launcher'
 version: 1
 steps:
@@ -56,7 +57,16 @@ steps:
   - set-control: { part-id: btn, control: pressed, value: 1 }
   - delay: 500ms
   - set-control: { part-id: btn, control: pressed, value: 0 }
-  - wait-serial: 'app: LcdTest not ported'
+  - wait-serial: 'app: open LCD_Test'
+  - wait-serial: 'lcd: pattern 0'
+  # LCD_Test: one clockwise detent inside the app, then a click quits back to the launcher
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'lcd: pattern 1'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close LCD_Test'
   - wait-serial: 'launcher: ready'
 
   # --- touch an icon: selects it (icon 2 RfidTest at (149, 210), launcher_layout::ringPoint)

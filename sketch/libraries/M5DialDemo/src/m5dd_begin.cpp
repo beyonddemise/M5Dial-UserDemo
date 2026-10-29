@@ -1,9 +1,10 @@
 /**
  * @file m5dd_begin.cpp
- * @brief m5dd::begin() / m5dd::runStandalone() and the sim-only shim they need.
+ * @brief m5dd::begin() / m5dd::runStandalone(), the shared app helpers and the sim-only shim.
  */
 #include "m5dd_begin.h"
 
+#include "config.h"
 #include "dial_encoder.h"
 
 #ifdef M5DD_SIM
@@ -17,6 +18,13 @@ constexpr int CANVAS_SIZE = 240;  ///< the round panel is 240x240
 constexpr int CANVAS_BPP = 16;    ///< RGB565: 115 KB, fits without PSRAM
 constexpr uint8_t RFID_REG_VERSION = 0x37;   ///< MFRC522 VersionReg
 constexpr uint32_t RFID_I2C_FREQ = 100000;   ///< as M5Dial's MFRC522 register access
+
+constexpr int ICON_SIZE = 42;               ///< launcher icon bitmaps are 42x42 RGB565
+constexpr uint32_t TONE_MS = 20;            ///< original HAL click length
+constexpr float TONE_PRESS_HZ = 2000;       ///< original HAL button-pressed callback
+constexpr float TONE_NEXT_HZ = 6000;        ///< original HAL encoder callback, count up
+constexpr float TONE_LAST_HZ = 7000;        ///< original HAL encoder callback, count down
+constexpr uint32_t RELEASE_POLL_MS = 5;     ///< original `while (!btn.read()) delay(5)`
 
 bool rfid_present = false;
 
@@ -96,6 +104,43 @@ void runStandalone(MOONCAKE::APP_BASE& app, AppContext& ctx) {
             ESP.restart();
         }
     }
+}
+
+void initGui(MOONCAKE::APP_BASE& app, AppContext& ctx, M5Canvas& icon, uint32_t themeColor,
+             const uint16_t* iconPixels) {
+    // why: the original HAL::init() left the canvas on efontCN_24 and every app's text relies on
+    // it; in UserDemo the launcher's render callback sets it before an app opens.
+    ctx.canvas->setFont(GUI_FONT_CN_BIG);
+    ctx.canvas->setTextSize(1);
+    GUI_Base* gui = app.getGui();
+    if (gui == nullptr) return;
+    // why no setSwapBytes: same byte-swapped icon data and default as the launcher (launcher.cpp)
+    icon.createSprite(ICON_SIZE, ICON_SIZE);
+    icon.pushImage(0, 0, ICON_SIZE, ICON_SIZE, iconPixels);
+    gui->setThemeColor(themeColor);
+    gui->init(ctx.canvas, &icon);
+}
+
+int32_t readDetents(EncoderDetent& detent) {
+    int32_t steps = detent.update(dialEncoder.read());
+    // why here: the original HAL played this from its encoder-moved callback, so it sounded in
+    // every app; without a HAL each app's input read plays it.
+    if (steps > 0) M5Dial.Speaker.tone(TONE_NEXT_HZ, TONE_MS);
+    if (steps < 0) M5Dial.Speaker.tone(TONE_LAST_HZ, TONE_MS);
+    return steps;
+}
+
+bool buttonClicked() {
+    // why the press edge (not the original's level read): consistent with the launcher, and a
+    // button still held when an app opens cannot close it at once
+    if (!M5Dial.BtnA.wasPressed()) return false;
+    M5Dial.Speaker.tone(TONE_PRESS_HZ, TONE_MS);
+    // why M5Dial.update(): BtnA only changes state inside update() (Review Focus 1)
+    while (M5Dial.BtnA.isPressed()) {
+        delay(RELEASE_POLL_MS);
+        M5Dial.update();
+    }
+    return true;
 }
 
 }  // namespace m5dd
