@@ -17,6 +17,7 @@
 #include <esp_heap_caps.h>
 
 #include "../../dial_encoder.h"
+#include "../../ui_tones.h"
 #include "../lcd_test/app_lcd_test.h"
 #include "launcher_layout.h"
 #include "launcher_render_callback.hpp"
@@ -29,13 +30,9 @@ static_assert(launcher_layout::ICON_HIT_R == ICON_RADIUS, "touch radius = drawn 
 
 namespace {
 
-// why: the original HAL played these from its encoder-moved and button-pressed callbacks
-// (hal.cpp); without a HAL the launcher plays them itself. Next item = count up in the
-// original's ESP32Encoder = 6 kHz, previous item = 7 kHz.
-constexpr uint32_t TONE_MS = 20;
-constexpr float TONE_PRESS_HZ = 2000;
-constexpr float TONE_NEXT_HZ = 6000;
-constexpr float TONE_LAST_HZ = 7000;
+// why: the original HAL played the click tones from its encoder-moved and button-pressed
+// callbacks (hal.cpp); without a HAL the launcher plays them itself (values: ui_tones.h).
+using namespace ui_tones;
 
 constexpr int ICON_SIZE = 42;        ///< launcher icon bitmaps are 42x42 RGB565
 constexpr int APP_OPEN_FRAMES = 10;  ///< circle-wipe frames of the open/close animation

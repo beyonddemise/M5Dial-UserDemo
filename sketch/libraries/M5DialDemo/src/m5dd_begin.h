@@ -53,18 +53,21 @@ void initGui(MOONCAKE::APP_BASE& app, AppContext& ctx, M5Canvas& icon, uint32_t 
              const uint16_t* iconPixels);
 
 /**
- * Detent steps since the last call, with the original HAL's knob click: 6 kHz for clockwise
- * (next), 7 kHz for counter-clockwise, 20 ms, once per call that moved.
+ * Detent steps since the last call, with the original HAL's knob click (ui_tones.h): 6 kHz for
+ * clockwise (next), 7 kHz for counter-clockwise, 20 ms, once per call that moved. Only apps
+ * that read the knob call it, matching upstream, where the click fired from wasMoved().
  * @param detent the app's detent tracker (reset it with dialEncoder.read() in onCreate())
  * @return detent steps, clockwise positive (0 = not moved)
  */
-int32_t readDetents(EncoderDetent& detent);
+int32_t readDetentsWithClick(EncoderDetent& detent);
 
 /**
  * Front-button "click" as the ported apps use it to quit: true once per press, after the
  * button has been released again. Plays the original HAL's 2 kHz press tone on the press,
  * then blocks until the release, calling M5Dial.update() (Review Focus 1).
  * The host must call M5Dial.update() before (runStandalone and the launcher do).
+ * A press that begins and ends inside another blocking wait of the app (one that also calls
+ * M5Dial.update(), e.g. waiting for a touch release) is consumed there and not reported.
  * @return true if the button was pressed (and is released now)
  */
 bool buttonClicked();

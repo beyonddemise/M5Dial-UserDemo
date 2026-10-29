@@ -47,7 +47,8 @@ void LCD_Test::onCreate()
 
     /* Wait until released */
     // why: opened by a centre tap, the finger is still down - it must not draw a dot.
-    // M5Dial.update() refreshes the touch state (Review Focus 1).
+    // M5Dial.update() refreshes the touch state (Review Focus 1); a button press made and
+    // released entirely inside this wait is consumed here (no quit).
     while (M5Dial.Touch.getDetail().isPressed())
     {
         delay(TOUCH_POLL_MS);
@@ -62,7 +63,7 @@ void LCD_Test::onRunning()
     // why no `delay(100)` ("lower frequency") as in the original: it throttled the per-count
     // wasMoved(); EncoderDetent already yields one step per detent, and the interrupt-driven
     // counter loses nothing in between.
-    int32_t steps = m5dd::readDetents(_detent);
+    int32_t steps = m5dd::readDetentsWithClick(_detent);
     if (steps != 0)
     {
         _gui.goPages(steps);
