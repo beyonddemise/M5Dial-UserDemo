@@ -386,3 +386,22 @@ with `<Class>` = `setAppName()` = the C++ class name.
 
 - The refresh time is stored before the read (upstream: after drawing), so a failing RTC logs one
   warning per second, not one per frame.
+
+### Brightness (`Set_Brightness`, Task 9)
+
+| Original (`_data.hal->...`)                              | Port                                                          |
+|----------------------------------------------------------|---------------------------------------------------------------|
+| `HAL::HAL*` user data                                    | `AppContext*` (`getUserData()`)                               |
+| `display.getBrightness()` / `setBrightness()`            | `M5Dial.Display.getBrightness()` / `setBrightness()`          |
+| `encoder.wasMoved(true)` + `getDirection() < 1` → brighter | `m5dd::readDetentsWithClick(_detent)`: steps > 0 brighter            |
+| `increment = 10 - delta_time / 8` (min 1), clamp 0..0xFF | `brightness_step::apply(value, steps, ms)` (host-tested)      |
+| `LVGL::Anim_Path` ease-out 600 ms                        | same (`smooth_menu/lv_anim`)                                  |
+| `!encoder.btn.read()` + hold loop                        | `m5dd::buttonClicked()`                                       |
+| `_log("get brightness")`, `_log("set to: %d")`           | `brightness: <n>` on open and every change                    |
+
+- Several detents in one frame each count (`steps * increment`); upstream moved once per
+  `wasMoved()`.
+- Upstream wrote the backlight only while the 600 ms animation ran, so its last write could stop
+  short of the target. The port writes whenever the animated value changes; `getValue()` returns
+  the end value once the animation is over, so the backlight lands exactly on the target.
+- As upstream, the value is kept when the app quits (not restored).

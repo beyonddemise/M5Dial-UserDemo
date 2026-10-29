@@ -84,6 +84,21 @@ steps:
   - wait-serial: 'app: close RTC_Test'
   - wait-serial: 'launcher: ready'
 
+  # --- Set_Brightness: two detents to slot 3, open, current value logged, quit unchanged
+  - set-control: { part-id: enc, control: steps, value: 2 }
+  - wait-serial: 'launcher: select 3 Brightness'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open Set_Brightness'
+  - wait-serial: 'brightness: '
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close Set_Brightness'
+  - wait-serial: 'launcher: ready'
+
   # --- touch an icon: selects it (icon 2 RfidTest at (149, 210), launcher_layout::ringPoint)
   - set-control: { part-id: touch, control: x, value: 149 }
   - set-control: { part-id: touch, control: y, value: 210 }
