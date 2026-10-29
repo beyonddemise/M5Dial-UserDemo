@@ -1,0 +1,15 @@
+# Smoke boot on the virtual M5Dial: the Smoke ELF must boot, M5Unified must
+# autodetect the board as an M5Dial (via the gc9a01 chip's RDDID answer) and the
+# display must be filled green.
+# Run: tools/sim.sh examples/Smoke sim/scenarios/Smoke/boot.test.yaml
+name: 'Smoke boots on the virtual M5Dial'
+version: 1
+steps:
+  - wait-serial: 'boot: smoke'
+  # why: m5::board_t::board_M5Dial == 12 (M5GFX src/lgfx/boards.hpp:23)
+  - wait-serial: 'board: 12'
+  # why: wokwi-cli cannot screenshot custom-chip displays ("Part does not have a valid
+  # framebuffer"), so the gc9a01 chip (attr frameLog=1) reports what the panel shows.
+  # It must be the last step: unlike wait-serial it does not pause the simulation, so
+  # serial output emitted while it waits would be missed by a later wait-serial.
+  - expect-chip-output: 'uniform=00ff00'

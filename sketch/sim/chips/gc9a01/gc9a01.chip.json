@@ -1,0 +1,6 @@
+{
+  "name": "GC9A01",
+  "author": "Stephan Wissel",
+  "pins": ["VCC", "GND", "CS", "DC", "SCL", "SDA", "RST", "BL"],
+  "display": { "width": 240, "height": 240 }
+}

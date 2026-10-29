@@ -1,0 +1,7 @@
+# Template for wokwi.toml - rendered by tools/sim.sh (do not edit wokwi.toml, it is
+# regenerated on every run). The firmware/elf placeholders = the sketch under test, [[chip]]
+# entries are appended for every chip built from sim/chips/*/.
+[wokwi]
+version = 1
+firmware = '@FIRMWARE@'
+elf = '@ELF@'
