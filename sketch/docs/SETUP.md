@@ -33,16 +33,24 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    (exactly 8 388 608 bytes) plus `.sha256`, written as `.partial` and renamed only once verified.
    `upload.sh` refuses to run unless such a verified pair exists (`tools/check_backup.sh`).
    `tools/restore_flash.sh <file> --yes` writes it back (destructive; verifies size and checksum first).
-5. **Build:** `sketch/tools/build.sh sketch/examples/Smoke` (output in `sketch/.build/Smoke/`).
-6. **Upload:** `sketch/tools/upload.sh sketch/examples/Smoke`. The port is auto-detected by USB
+5. **Build:** `sketch/tools/build.sh sketch/examples/DialProbe` (output in `sketch/.build/DialProbe/`).
+6. **Upload:** `sketch/tools/upload.sh sketch/examples/DialProbe`. The port is auto-detected by USB
    VID:PID `303A:1001`. If none is found, plug the cable in, or hold the knob button while
    plugging in to enter download mode.
 7. **Check on the device:**
-   `sketch/tools/.venv/bin/python sketch/tools/device_test.py sketch/examples/Smoke --expect 'boot: smoke'`
+   `sketch/tools/.venv/bin/python sketch/tools/device_test.py sketch/examples/DialProbe --expect 'init: display 240x240' 'init: rtc ok' 'init: touch ok' 'init: rfid ok' 'rtc: 20'`
    Serial monitor: `sketch/tools/monitor.sh` (115200 baud).
 8. **VSCode:** open the `sketch/` folder; tasks Build, Upload, Monitor, Build+Upload+Monitor,
    Device test and Host tests are in `.vscode/tasks.json`. Run `tools/gen_compile_commands.sh`
    once for IntelliSense. Unit tests: `sketch/tools/.venv/bin/python -m unittest discover sketch/tools/tests`.
+9. **Virtual M5Dial (Wokwi):** install the recommended Wokwi VSCode extension and get a CI token
+   at https://wokwi.com/dashboard/ci (`export WOKWI_CLI_TOKEN=...`).
+   - VSCode task **Simulate**: pick a sketch; it builds the sim variant and the chips
+     (`tools/sim.sh <sketch> --prepare-only`), then starts the Wokwi panel on `sim/wokwi.toml`
+     (select that file once with "Wokwi: Select Config File").
+   - VSCode task **Sim test**: pick a sketch and a scenario; runs `tools/sim.sh <sketch> <scenario>`.
+   - Command line: `sketch/tools/sim.sh sketch/examples/DialProbe sketch/sim/scenarios/DialProbe/init.test.yaml`.
+   - The free Wokwi plan has a monthly CI-minute quota; every scenario run (local or CI) counts against it.
 
 ## Known environment quirk
 
