@@ -303,3 +303,23 @@ As upstream `main.cpp`: if `ENABLE_FACTORY_TEST` (config.h, default 1) is set an
 held for more than 1000 ms at boot, polled every 10 ms with `M5Dial.update()`, the sketch plays
 4 kHz/30 ms twice (50 ms apart). Until Task 15 it then logs `factory: not ported` and continues
 with the launcher. Upstream ran the factory test forever instead.
+
+### Board options: 8 MB flash, `huge_app` (Task 6 fix round 1)
+
+`tools/deps.txt` sets `M5DIAL_FQBN_OPTIONS=CDCOnBoot=cdc,FlashSize=8M,PartitionScheme=huge_app`.
+The M5Dial has 8 MB flash. The board default is a 4 MB layout with a 1.25 MB app partition, and
+UserDemo already used 88% of it (`lgfx_efont_cn_24` alone is 550 KB), before the Wi-Fi and BLE
+apps are added. `huge_app` gives a 3 MB app and no OTA; the original firmware also used a 4 MB
+factory app without OTA. The flash backup and restore tools always handle the whole 8 MB chip,
+whatever the partition table.
+
+### Optional secrets.h
+
+`config.h` includes `secrets.h` only `#if __has_include("secrets.h")`, and otherwise defines
+placeholder `FACTORY_TEST_WIFI_SSID` / `FACTORY_TEST_WIFI_PASSWORD`. `M5DD_HAVE_SECRETS` is 1 or 0
+to say which case applied. A fresh clone and CI therefore build UserDemo without the file.
+
+The lookup works from a library header because arduino-cli passes `-I<sketch dir>` first, for
+the sketch and for every library source alike (checked in a `--verbose` build). So every
+translation unit of one build sees the same answer. Sketches without a `secrets.h` (the
+examples) and the host tests (`-Isrc` only) get the placeholders.
