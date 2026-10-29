@@ -283,7 +283,9 @@ Builder flashes each sketch, then walks the owner through `TEST_CHECKLIST.md`, r
 
 ---
 
-## GitHub tracking (after plan approval; owner confirms list first)
+## GitHub tracking
+
+**Created 2026-10-30:** epic [#21](https://github.com/beyonddemise/M5Dial-UserDemo/issues/21); issues #1–#20 = Tasks 1–20 (numbers match), attached as sub-issues of #21.
 
 - Epic "Port UserDemo to Arduino sketches (M5Dial library)" with spec + plan links and the 20-item task list.
 - Issues 1–20 = Tasks 1–20. Labels: `arduino-port` + `infra` (1, 4, 5, 17), `sim` (2, 3, 20), `app` (6–16), `docs` (18), `human-needed` (19), `upstream` (20).
