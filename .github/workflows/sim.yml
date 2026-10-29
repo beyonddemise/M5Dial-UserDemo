@@ -1,7 +1,7 @@
 # Runs the Arduino port's Wokwi scenarios on the virtual M5Dial (sketch/sim).
-# Early subset of the full CI (Task 17 extends this: more sketches/scenarios,
-# host tests, build matrix). Each entry in the scenario matrix is
-# "<sketch-dir> <scenario.yaml>" relative to sketch/.
+# Early subset of the full CI (Task 17 extends this: host tests, build matrix).
+# Runs every scenario under sketch/sim/scenarios/<Sketch>/*.test.yaml against the
+# sketch examples/<Sketch> (or <Sketch> for top-level sketches such as UserDemo).
 name: sim
 
 on:
@@ -23,13 +23,6 @@ jobs:
   scenario:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Smoke-boot
-            sketch: examples/Smoke
-            scenario: sim/scenarios/Smoke/boot.test.yaml
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -65,23 +58,29 @@ jobs:
         # why: covers sim_ci.sh retry/quota verdicts, which the scenario step cannot when Wokwi is unavailable
         run: sketch/tools/.venv/bin/python -m unittest discover sketch/tools/tests
 
-      - name: Run scenario
+      - name: Run scenarios
         env:
           WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
-          SKETCH: ${{ matrix.sketch }}
-          SCENARIO: ${{ matrix.scenario }}
         working-directory: sketch
-        # why: tools/sim_ci.sh holds the verdict logic (unit-tested in tools/tests/test_sim_ci.py):
-        # a Wokwi transport drop (code 1006) is retried once; a used-up Wokwi CI minute quota is a
-        # billing condition, not a test result, so the scenario is reported as SKIPPED (warning +
-        # step summary) and the job stays green; any other failure fails the job.
-        run: tools/sim_ci.sh --timeout-ms 60000 "$SKETCH" "$SCENARIO"
+        # why: one tools/sim_ci.sh call for all scenarios (verdict logic unit-tested in
+        # tools/tests/test_sim_ci.py): a Wokwi transport drop (code 1006) is retried once; a
+        # used-up Wokwi CI minute quota marks this and the remaining scenarios SKIPPED (warning +
+        # step summary) without failing the job; all scenarios run even if one fails, and the
+        # step fails if any scenario failed.
+        run: |
+          pairs=()
+          for scenario in sim/scenarios/*/*.test.yaml; do
+            name="$(basename "$(dirname "$scenario")")"
+            sketch="examples/$name"; [ -d "$sketch" ] || sketch="$name"
+            pairs+=("$sketch" "$scenario")
+          done
+          tools/sim_ci.sh --timeout-ms 60000 "${pairs[@]}"
 
       - name: Upload sim output
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: sim-${{ matrix.name }}
+          name: sim-output
           path: |
             sketch/.build/sim-out/
             sketch/sim/wokwi.toml

@@ -10,7 +10,7 @@
 #      one [[chip]] entry per built chip)
 #   4. runs wokwi-cli sim/ --scenario <yaml> --timeout <ms>
 # Firmware: sketch/.build/sim/<Name>/ (separate from the device build in .build/<Name>/).
-# Output (CI artifact): sketch/.build/sim-out/<Name>/serial.log; scenarios may save
+# Output (CI artifact): sketch/.build/sim-out/<Name>/<scenario>.serial.log; scenarios may save
 # files there too (take-screenshot save-to is relative to the scenario file).
 # Exit code = wokwi-cli's (0 pass, 42 timeout, other = failure).
 set -euo pipefail
@@ -68,5 +68,6 @@ toml="${toml//@ELF@/$firmware/$name.ino.elf}"
 printf '%s\n%s' "$toml" "$chips_toml" > "$SIM_DIR/wokwi.toml"
 
 # 4. simulate
+scenario_name="$(basename "$scenario" .yaml)"; scenario_name="${scenario_name%.test}"
 exec wokwi-cli "$SIM_DIR" --scenario "$scenario" --timeout "$timeout_ms" \
-  --serial-log-file "$out_dir/serial.log"
+  --serial-log-file "$out_dir/$scenario_name.serial.log"

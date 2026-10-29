@@ -1,0 +1,10 @@
+# A touch at (120, 60) on the FT3267 chip must be reported at the same position.
+name: 'DialProbe: touch'
+version: 1
+steps:
+  - wait-serial: 'probe: ready'
+  - set-control: { part-id: touch, control: x, value: 120 }
+  - set-control: { part-id: touch, control: y, value: 60 }
+  - set-control: { part-id: touch, control: touched, value: 1 }
+  - wait-serial: 'touch: x=120 y=60'
+  - set-control: { part-id: touch, control: touched, value: 0 }
