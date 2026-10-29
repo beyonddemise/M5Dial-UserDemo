@@ -134,6 +134,46 @@ static void test_window(void) {
   printf("window ok\n");
 }
 
+static chip_t *chip(void) { return (chip_t *)watch[P_CS].user_data; }
+
+static void caset(uint16_t xs, uint16_t xe) {
+  cmd(0x2A); dat((uint8_t)(xs >> 8)); dat((uint8_t)xs); dat((uint8_t)(xe >> 8)); dat((uint8_t)xe);
+}
+
+static void test_read_then_caset_no_clocks(void) {
+  // read command never clocked out, next command follows with DC still low
+  set_pin(P_CS, LOW);
+  cmd(0x04);
+  caset(3, 7);
+  set_pin(P_CS, HIGH);
+  assert(mode[P_SDA] == INPUT && "no reply started");
+  assert(chip()->xs == 3 && chip()->xe == 7 && "CASET params landed");
+  printf("read then CASET (no clocks) ok\n");
+}
+
+static void test_read_then_command_same_cs(void) {
+  set_pin(P_CS, LOW);
+  cmd(0x04);
+  set_pin(P_DC, HIGH);
+  assert(mode[P_SDA] == OUTPUT);
+  for (int i = 0; i < 8; i++) clock_in();
+  caset(11, 13); /* DC low ends the reply */
+  assert(mode[P_SDA] == INPUT && "SDA released by DC low");
+  set_pin(P_CS, HIGH);
+  assert(chip()->xs == 11 && chip()->xe == 13);
+  printf("read then command (same CS) ok\n");
+}
+
+static void test_reset_with_cs_low(void) {
+  set_pin(P_CS, LOW);
+  set_pin(P_RST, LOW);
+  set_pin(P_RST, HIGH);
+  caset(20, 30); /* spi_byte() asserts the chip is listening */
+  set_pin(P_CS, HIGH);
+  assert(chip()->xs == 20 && chip()->xe == 30);
+  printf("reset with CS low ok\n");
+}
+
 int main(void) {
   level[P_CS] = HIGH;
   level[P_RST] = HIGH;
@@ -142,6 +182,10 @@ int main(void) {
   test_fill_green();
   test_window();
   test_rddid(); /* reads still work after pixel traffic */
+  test_read_then_caset_no_clocks();
+  test_read_then_command_same_cs();
+  test_reset_with_cs_low();
+  test_rddid();
   printf("all gc9a01 host tests passed\n");
   return 0;
 }

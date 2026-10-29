@@ -59,10 +59,13 @@ done
 # 3. wokwi.toml (git-ignored, regenerated on every run)
 # why: wokwi.toml paths are relative to sim/; .build is a sibling of sim/
 firmware="../.build/sim/$name"
-sed -e "s|@FIRMWARE@|$firmware/$name.ino.merged.bin|" \
-    -e "s|@ELF@|$firmware/$name.ino.elf|" \
-    "$SIM_DIR/wokwi.toml.in" > "$SIM_DIR/wokwi.toml"
-printf '%s' "$chips_toml" >> "$SIM_DIR/wokwi.toml"
+# why: bash substitution, not sed - sketch names must not be parsed as sed syntax;
+# bash >= 5.2 would otherwise expand '&' in the replacement to the matched text
+shopt -u patsub_replacement 2>/dev/null || true
+toml="$(cat "$SIM_DIR/wokwi.toml.in")"
+toml="${toml//@FIRMWARE@/$firmware/$name.ino.merged.bin}"
+toml="${toml//@ELF@/$firmware/$name.ino.elf}"
+printf '%s\n%s' "$toml" "$chips_toml" > "$SIM_DIR/wokwi.toml"
 
 # 4. simulate
 exec wokwi-cli "$SIM_DIR" --scenario "$scenario" --timeout "$timeout_ms" \

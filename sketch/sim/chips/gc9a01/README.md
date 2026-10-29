@@ -22,6 +22,25 @@ the panel.
 `SDA` is the controller's single bidirectional data line. Wire it to the MCU's MOSI.
 If your MCU reads on a separate MISO pin, wire that to `SDA` as well.
 
+## Controls
+
+None. The chip has no interactive controls in the simulator UI. Configure it with the attributes below.
+
+## Interface behaviour
+
+- **CS** low starts reception and CS high ends any transfer or read. Command/parameter
+  state persists across CS cycles, as on the real part.
+- **DC** is sampled per byte: bytes received while DC is low are commands, while high are
+  parameters/pixels. Parameters belong to the most recent command; any new command
+  cancels a pending, not yet clocked-out read.
+- **Reads:** after a read command (`04h`, `09h`-`0Ch`, `DAh`-`DCh`), the next DC edge with CS
+  low turns `SDA` into an output. The chip then shifts `readDummyBits` dummy bits followed by the
+  reply, MSB first, on the falling edges of `SCL`. Bits after the reply read as 0. The reply
+  ends, and `SDA` is released, when CS goes high or DC goes low (the next command within the
+  same CS assertion).
+- **RST** low resets the registers to their defaults. Frame memory is kept, as on hardware,
+  where it is undefined. RST high resumes reception if CS is still low.
+
 ## Attributes
 
 | Attribute       | Default | Meaning |

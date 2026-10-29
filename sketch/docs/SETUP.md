@@ -10,7 +10,7 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
 | Python (venv) | pyserial 3.5, pillow 11.3.0, esptool 4.12.0, bleak 1.1.1 |
 | Simulation | wokwi-cli 0.29.1, wasi-sdk 34 |
 
-1. **Install arduino-cli:** `brew install arduino-cli` (macOS). Other OS: see the arduino-cli docs.
+1. **Install arduino-cli:** `brew install arduino-cli` (macOS). Other OS: see the arduino-cli docs. Tested and used in CI: 1.5.1 (`ARDUINO_CLI_VERSION` in `tools/deps.txt`).
 2. **Run the one-time setup:** `sketch/tools/setup.sh`. It creates `tools/.venv`, downloads
    wokwi-cli into `tools/bin/` and wasi-sdk into `tools/wasi-sdk/`, then installs the M5Stack
    core into the project-local `sketch/.arduino/` and the libraries into `sketch/libraries/`

@@ -126,6 +126,7 @@ static uint32_t render_pixel(const chip_t *c, uint16_t v) {
   return 0xff000000u | (b << 16) | (g << 8) | r; /* bytes R,G,B,A in memory */
 }
 
+/** Extend the dirty row range of the RGBA mirror to include `row` (flushed by flush()). */
 static void mark_dirty(chip_t *c, int row) {
   if (c->dirty_lo < 0 || row < c->dirty_lo) c->dirty_lo = row;
   if (row > c->dirty_hi) c->dirty_hi = row;
@@ -224,6 +225,9 @@ static void queue_reply(chip_t *c, const uint8_t *bytes, uint32_t n) {
 static void command(chip_t *c, uint8_t cmd) {
   if (c->debug) printf("gc9a01: cmd %02X\n", cmd);
   if (c->ram_write) frame_summary(c);
+  // why: any new command cancels a read that was queued but never clocked out;
+  // queue_reply() below sets it again for real read commands.
+  c->read_pending = false;
   c->cmd = cmd;
   c->nparams = 0;
   c->ram_write = false;
@@ -298,6 +302,7 @@ static void data(chip_t *c, uint8_t b) {
  * Serial interface
  * ------------------------------------------------------------------------- */
 
+/** Start (or keep) receiving bytes through the Wokwi SPI device into spi_buf. */
 static void spi_begin(chip_t *c) {
   if (c->spi_running) return;
   c->spi_running = true;
@@ -335,6 +340,7 @@ static void read_begin(chip_t *c) {
   if (c->debug) printf("gc9a01: read reply for %02X\n", c->cmd);
 }
 
+/** Finish a read reply: stop watching SCL and release SDA back to the host. */
 static void read_end(chip_t *c) {
   if (c->if_state != IF_READ) return;
   pin_watch_stop(c->scl);
@@ -343,6 +349,7 @@ static void read_end(chip_t *c) {
   if (c->debug) printf("gc9a01: read done after %u clocks\n", (unsigned)c->bit_pos);
 }
 
+/** SCL edge while replying to a read: advance to the next reply bit on each falling edge. */
 static void on_scl(void *user_data, pin_t pin, uint32_t value) {
   (void)pin;
   chip_t *c = user_data;
@@ -354,6 +361,10 @@ static void on_scl(void *user_data, pin_t pin, uint32_t value) {
   }
 }
 
+/**
+ * SPI device callback: decode the received bytes with the DC level they were sent
+ * under, then keep listening while CS stays low (unless a read reply is queued).
+ */
 static void on_spi_done(void *user_data, uint8_t *buffer, uint32_t count) {
   chip_t *c = user_data;
   for (uint32_t i = 0; i < count; i++) {
@@ -366,10 +377,18 @@ static void on_spi_done(void *user_data, uint8_t *buffer, uint32_t count) {
   if (pin_read(c->cs) == LOW && !c->read_pending) spi_begin(c);
 }
 
+/**
+ * CS / DC / RST edge handler.
+ * - CS low starts reception, CS high ends any transfer or read.
+ * - DC edges flush the bytes received so far (they belong to the old DC level);
+ *   the edge that follows a read command turns SDA around for the reply.
+ * - RST low resets the registers; RST high resumes reception if CS is still low.
+ */
 static void on_pin(void *user_data, pin_t pin, uint32_t value) {
   chip_t *c = user_data;
   if (pin == c->rst) {
     if (value == LOW) { spi_end(c); read_end(c); reset_registers(c); flush(c); }
+    else if (pin_read(c->cs) == LOW) spi_begin(c);
     return;
   }
   if (pin == c->cs) {
@@ -385,7 +404,12 @@ static void on_pin(void *user_data, pin_t pin, uint32_t value) {
     return;
   }
   if (pin == c->dc) {
-    if (c->if_state == IF_READ) return; /* DC level is irrelevant while replying */
+    if (c->if_state == IF_READ) {
+      // why: a DC high edge while replying changes nothing; DC low means the host has
+      // moved on to the next command within the same CS assertion - end the reply.
+      if (value == HIGH) return;
+      read_end(c);
+    }
     // why: bytes already shifted in belong to the old DC level - flush them first
     spi_end(c);
     c->dc_data = (value == HIGH);
@@ -395,6 +419,7 @@ static void on_pin(void *user_data, pin_t pin, uint32_t value) {
   }
 }
 
+/** Wokwi entry point: read attributes, set up pins, SPI device and framebuffer. */
 void chip_init(void) {
   chip_t *c = calloc(1, sizeof(chip_t));
   c->ips = attr_read(attr_init("ips", 1)) != 0;
