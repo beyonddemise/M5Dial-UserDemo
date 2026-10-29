@@ -5,18 +5,22 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-ORIGINALS = [
-    os.path.join(REPO, "main/apps/launcher/launcher_icons"),
-    os.path.join(REPO, "main/apps/app_temp_demo/gui/temp_demo_icons"),
-]
+ASSETS = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), "..", "..", "libraries", "M5DialDemo", "src", "assets"))
+HEADER_DIRS = [os.path.join(ASSETS, "launcher_icons"), os.path.join(ASSETS, "temp_demo_icons")]
+
+
+def shipped_header(png):
+    """Return the shipped header path matching a PNG in assets/png."""
+    name = os.path.basename(png)[:-4] + ".h"
+    return next(os.path.join(d, name) for d in HEADER_DIRS if os.path.exists(os.path.join(d, name)))
 
 
 class Png2Rgb565Test(unittest.TestCase):
     def test_regenerates_all_existing_headers(self):
-        import png2rgb565  # noqa: E402  (imported late so RED shows a clear failure)
+        import png2rgb565
 
-        pairs = [(p, p[:-4] + ".h") for d in ORIGINALS for p in sorted(glob.glob(d + "/*.png"))]
+        pairs = [(p, shipped_header(p)) for p in sorted(glob.glob(ASSETS + "/png/*.png"))]
         self.assertGreaterEqual(len(pairs), 18)
         for png, hdr in pairs:
             with self.subTest(png=os.path.basename(png)):
@@ -28,7 +32,7 @@ class Png2Rgb565Test(unittest.TestCase):
         import tempfile
         import png2rgb565
 
-        png = os.path.join(ORIGINALS[0], "icon_ble.png")
+        png = os.path.join(ASSETS, "png", "icon_ble.png")
         with tempfile.TemporaryDirectory() as tmp:
             out = os.path.join(tmp, "x.h")
             self.assertEqual(png2rgb565.main([png, out, "--name", "icon_ble"]), 0)
