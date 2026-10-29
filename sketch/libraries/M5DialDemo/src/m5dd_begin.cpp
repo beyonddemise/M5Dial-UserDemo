@@ -15,6 +15,20 @@ namespace {
 
 constexpr int CANVAS_SIZE = 240;  ///< the round panel is 240x240
 constexpr int CANVAS_BPP = 16;    ///< RGB565: 115 KB, fits without PSRAM
+constexpr uint8_t RFID_REG_VERSION = 0x37;   ///< MFRC522 VersionReg
+constexpr uint32_t RFID_I2C_FREQ = 100000;   ///< as M5Dial's MFRC522 register access
+
+bool rfid_present = false;
+
+/**
+ * Probes the WS1850S/MFRC522 on the internal I2C bus.
+ * @return true if it ACKs and reports a plausible VersionReg (not 00h/FFh)
+ */
+bool probe_rfid() {
+    uint8_t v = 0;
+    return M5.In_I2C.readRegister(RC522_I2C_ADDRESS, RFID_REG_VERSION, &v, 1, RFID_I2C_FREQ) &&
+           v != 0x00 && v != 0xFF;
+}
 
 #ifdef M5DD_SIM
 /**
@@ -42,19 +56,29 @@ void begin(const char* sketchName, M5Canvas& canvas) {
     sim_route_panel_miso();
 #endif
     // why: enableEncoder=false - M5Dial's ENCODER attaches no interrupts on GPIO40/41
-    // (m5stack/M5Dial#8); dialEncoder counts in an ISR instead (D12)
-    M5Dial.begin(M5.config(), /*enableEncoder*/ false, /*enableRFID*/ true);
+    // (m5stack/M5Dial#8); dialEncoder counts in an ISR instead (D12).
+    // why enableRFID=false (deviation from the plan's M5Dial.begin(cfg, false, true)):
+    // MFRC522::PCD_Reset() busy-waits forever on an unanswered CommandReg read, so a missing
+    // or dead reader would hang every sketch at boot; RFID is initialised below only if the
+    // reader answers (see docs/PORTING_NOTES.md "RFID presence probe").
+    M5Dial.begin(M5.config(), /*enableEncoder*/ false, /*enableRFID*/ false);
     dialEncoder.begin();
     // why: M5Unified's default serial log level comes from CORE_DEBUG_LEVEL (0 in this core's
     // default build), so INFO must be enabled explicitly
     M5.Log.setLogLevel(m5::log_target_serial, ESP_LOG_INFO);
+    M5_LOGI("boot: %s", sketchName);
+
+    rfid_present = probe_rfid();
+    if (rfid_present) M5Dial.Rfid.begin();  // = PCD_Init(), what enableRFID=true would call
+    M5_LOGI("init: rfid %s", rfid_present ? "ok" : "missing");
 
     canvas.setColorDepth(CANVAS_BPP);
     if (!canvas.createSprite(CANVAS_SIZE, CANVAS_SIZE)) {
         M5_LOGE("boot: canvas alloc failed (%d free)", (int)ESP.getFreeHeap());
     }
-    M5_LOGI("boot: %s", sketchName);
 }
+
+bool rfidPresent() { return rfid_present; }
 
 void runStandalone(MOONCAKE::APP_BASE& app, AppContext& ctx) {
     app.setUserData(&ctx);

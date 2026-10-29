@@ -7,10 +7,11 @@
  * and on the device (tools/device_test.py), so sim and hardware can be compared directly.
  *
  * Log lines (tag: message):
- *   boot: DialProbe               (m5dd::begin)
- *   init: board <n> | init: display <w>x<h> | init: rtc ok|fail | init: touch ok|fail | init: rfid ok|fail
+ *   boot: DialProbe | init: rfid ok|missing   (both from m5dd::begin)
+ *   init: board <n> | init: display <w>x<h> | init: rtc ok|fail | init: touch ok|fail
  *   probe: ready
  *   enc: steps=<+-n> total=<+-n> raw=<n>  (clockwise = positive; total = sum of all steps)
+ *   enc: idle raw=<n> total=<+-n>         (once, 100 ms after the encoder stops moving)
  *   btn: pressed|released
  *   touch: x=<n> y=<n>
  *   rtc: YYYY-MM-DD HH:MM:SS      (1 Hz)
@@ -28,14 +29,16 @@ namespace {
 
 constexpr uint8_t TOUCH_I2C_ADDR = 0x38;  ///< FT3267, M5GFX.cpp:1987
 constexpr uint8_t TOUCH_REG_VENDID = 0xA8; ///< FT5x06 vendor id, Touch_FT5x06.inl:34
-constexpr uint8_t RFID_REG_VERSION = 0x37; ///< MFRC522 VersionReg
 constexpr uint32_t RTC_PERIOD_MS = 1000;
 constexpr uint32_t RFID_PERIOD_MS = 250;
+constexpr uint32_t ENC_IDLE_MS = 100;      ///< no edge for this long = knob at rest
 
 M5Canvas canvas(&M5Dial.Display);
 EncoderDetent detent;  ///< M5DD_ENCODER_COUNTS_PER_DETENT / M5DD_ENCODER_CW_SIGN from config.h
-bool rfid_ok = false;
 int32_t enc_total = 0;  ///< sum of all logged steps (probe.test.yaml "encoder fast" checks it)
+int32_t enc_last_raw = 0;      ///< raw count at the previous poll
+uint32_t enc_moved_ms = 0;     ///< millis() of the last raw change
+bool enc_idle_logged = true;   ///< the idle line for the current rest position was printed
 uint32_t rtc_next_ms = 0;
 uint32_t rfid_next_ms = 0;
 
@@ -50,15 +53,22 @@ bool probe_touch() {
     return probe_reg(TOUCH_I2C_ADDR, TOUCH_REG_VENDID, &v, 400000) && v != 0;
 }
 
-/** RFID reader answers with a plausible VersionReg value. */
-bool probe_rfid() {
-    uint8_t v = 0;
-    return probe_reg(RC522_I2C_ADDRESS, RFID_REG_VERSION, &v, 100000) && v != 0x00 && v != 0xFF;
-}
-
-/** Log the detent steps (clockwise positive) the interrupt-counted encoder moved since the last poll. */
-void poll_encoder() {
+/**
+ * Log the detent steps (clockwise positive) the interrupt-counted encoder moved since the
+ * last poll, and the raw count once the knob has come to rest.
+ * why the idle line: steps fire at the half-detent point, so a step line's raw value depends
+ * on poll timing; the raw count at rest is exact and shows every lost or extra edge.
+ */
+void poll_encoder(uint32_t now) {
     int32_t raw = dialEncoder.read();
+    if (raw != enc_last_raw) {
+        enc_last_raw = raw;
+        enc_moved_ms = now;
+        enc_idle_logged = false;
+    } else if (!enc_idle_logged && now - enc_moved_ms >= ENC_IDLE_MS) {
+        enc_idle_logged = true;
+        M5_LOGI("enc: idle raw=%d total=%d", (int)raw, (int)enc_total);
+    }
     int32_t steps = detent.update(raw);
     if (steps == 0) return;
     enc_total += steps;
@@ -106,7 +116,7 @@ void poll_rtc(uint32_t now) {
  * why: a halted card ignores REQA, so it is logged once until it leaves the field and comes back.
  */
 void poll_rfid(uint32_t now) {
-    if (!rfid_ok || (int32_t)(now - rfid_next_ms) < 0) return;
+    if (!m5dd::rfidPresent() || (int32_t)(now - rfid_next_ms) < 0) return;
     rfid_next_ms = now + RFID_PERIOD_MS;
     if (!M5Dial.Rfid.PICC_IsNewCardPresent() || !M5Dial.Rfid.PICC_ReadCardSerial()) return;
     char hex[3 * sizeof(M5Dial.Rfid.uid.uidByte)] = {0};
@@ -121,8 +131,8 @@ void poll_rfid(uint32_t now) {
 }  // namespace
 
 /**
- * Bring up the M5Dial (m5dd::begin, which also initialises RFID), probe each peripheral
- * and log the result; the RFID probe only reports whether the reader answers.
+ * Bring up the M5Dial (m5dd::begin, which also probes and initialises RFID and logs
+ * `init: rfid ok|missing`), probe the other peripherals and log the result.
  */
 void setup() {
     m5dd::begin("DialProbe", canvas);
@@ -132,11 +142,10 @@ void setup() {
     M5_LOGI("init: display %dx%d", (int)M5Dial.Display.width(), (int)M5Dial.Display.height());
     M5_LOGI("init: rtc %s", M5Dial.Rtc.isEnabled() ? "ok" : "fail");
     M5_LOGI("init: touch %s", probe_touch() ? "ok" : "fail");
-    rfid_ok = probe_rfid();
-    M5_LOGI("init: rfid %s", rfid_ok ? "ok" : "fail");
 
     draw();
-    detent.reset(dialEncoder.read());
+    enc_last_raw = dialEncoder.read();
+    detent.reset(enc_last_raw);
     M5_LOGI("probe: ready");
 }
 
@@ -144,7 +153,7 @@ void setup() {
 void loop() {
     M5Dial.update();
     uint32_t now = millis();
-    poll_encoder();
+    poll_encoder(now);
     poll_button();
     poll_touch();
     poll_rtc(now);
