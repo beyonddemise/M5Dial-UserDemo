@@ -26,3 +26,23 @@
 #ifndef M5DD_ENCODER_CW_SIGN
 #define M5DD_ENCODER_CW_SIGN (-1)
 #endif
+
+/**
+ * Factory-test entry check in the UserDemo sketch (hold the button > 1 s at boot).
+ * Defaults on, as the original build (CMakeLists.txt: add_definitions(-DENABLE_FACTORY_TEST));
+ * build with -DENABLE_FACTORY_TEST=0 to drop it.
+ */
+#ifndef ENABLE_FACTORY_TEST
+#define ENABLE_FACTORY_TEST 1
+#endif
+
+/**
+ * GUI fonts of the original (CMakeLists.txt add_definitions). Plain text macros: they only
+ * need M5GFX where they are used, so this header stays Arduino-free.
+ */
+#ifndef GUI_FONT_CN_BIG
+#define GUI_FONT_CN_BIG (&fonts::efontCN_24)
+#endif
+#ifndef GUI_FONT_CN_SMALL
+#define GUI_FONT_CN_SMALL (&fonts::efontCN_16_b)
+#endif

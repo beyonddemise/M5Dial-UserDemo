@@ -34,6 +34,8 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    `upload.sh` refuses to run unless such a verified pair exists (`tools/check_backup.sh`).
    `tools/restore_flash.sh <file> --yes` writes it back (destructive; verifies size and checksum first).
 5. **Build:** `sketch/tools/build.sh sketch/examples/DialProbe` (output in `sketch/.build/DialProbe/`).
+   The `UserDemo` sketch needs its git-ignored Wi-Fi credentials first:
+   `cp sketch/UserDemo/secrets.example.h sketch/UserDemo/secrets.h` and fill in your values.
 6. **Upload:** `sketch/tools/upload.sh sketch/examples/DialProbe`. The port is auto-detected by USB
    VID:PID `303A:1001`. If none is found, plug the cable in, or hold the knob button while
    plugging in to enter download mode.

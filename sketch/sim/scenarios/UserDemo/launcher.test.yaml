@@ -1,0 +1,73 @@
+# UserDemo on the virtual M5Dial: launcher boot, encoder navigation, button open/return and
+# touch selection - all in ONE Wokwi session (one session per sketch keeps CI minutes down).
+# Run: tools/sim.sh UserDemo sim/scenarios/UserDemo/launcher.test.yaml
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, touch = ft3267, enc = encoder chip on
+# GPIO41 (A) / GPIO40 (B). `enc.steps` emits that many detents (positive = clockwise), 0 re-arms.
+# Launcher slots (launcher_layout.h): 0 LcdTest, 1 RtcTest, 2 RfidTest, 3 Brightness,
+# 4 WifiScan, 5 BleServer, 6 TempDemo, 7 MoreMenu, 8/9 empty ("-"). No app is ported yet, so
+# opening one logs `app: <name> not ported` and returns to the launcher.
+name: 'UserDemo: launcher'
+version: 1
+steps:
+  # --- boot with the button held > 1 s: factory-test entry check (ENABLE_FACTORY_TEST)
+  # why held from t=0: UserDemo checks the button right after m5dd::begin; the factory test is
+  # not ported yet, so it logs `factory: not ported` and continues with the launcher.
+  # The launcher starts with the button still down; releasing it must not open an app (the
+  # launcher opens on a press *edge*, wasPressed) - otherwise `app: LcdTest not ported` would
+  # come before the select line below (wait-serial cannot assert absence; see report).
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - wait-serial: 'boot: UserDemo'
+  - wait-serial: 'factory: not ported'
+  - wait-serial: 'launcher: ready'
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - delay: 100ms
+
+  # --- clockwise = next item (Review Focus 3)
+  # why edgeIntervalUs 40 ms: a slow, unambiguous turn; checks direction and one step per detent
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'launcher: select 1 RtcTest'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 10ms
+
+  # --- counter-clockwise back to 0, then once more: wraps to the last ring slot
+  # why 9, not 7 (plan text): the original menu has 10 ring slots (n = 10) for 8 icons and loop
+  # mode on, so goLast() from 0 lands on empty slot 9 ("-. -" tag) - kept as in the original.
+  - set-control: { part-id: enc, control: steps, value: -1 }
+  - wait-serial: 'launcher: select 0 LcdTest'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 10ms
+  - set-control: { part-id: enc, control: steps, value: -1 }
+  - wait-serial: 'launcher: select 9 -'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 10ms
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'launcher: select 0 LcdTest'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+
+  # --- press, hold 500 ms, release opens the selected app (Review Focus 1)
+  # why: the launcher waits for the release in a loop; without M5Dial.update() in that loop
+  # BtnA never sees the release and the launcher hangs - the next line would never come.
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 500ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: LcdTest not ported'
+  - wait-serial: 'launcher: ready'
+
+  # --- touch an icon: selects it (icon 2 RfidTest at (149, 210), launcher_layout::ringPoint)
+  - set-control: { part-id: touch, control: x, value: 149 }
+  - set-control: { part-id: touch, control: y, value: 210 }
+  - set-control: { part-id: touch, control: touched, value: 1 }
+  - wait-serial: 'launcher: select 2 RfidTest'
+  - set-control: { part-id: touch, control: touched, value: 0 }
+  # why 400 ms: the centre tap only opens once the 300 ms selector animation has finished
+  - delay: 400ms
+
+  # --- touch the centre circle: opens the selected app, then back to the launcher
+  - set-control: { part-id: touch, control: x, value: 120 }
+  - set-control: { part-id: touch, control: y, value: 120 }
+  - set-control: { part-id: touch, control: touched, value: 1 }
+  - wait-serial: 'app: RfidTest not ported'
+  - wait-serial: 'launcher: ready'
+  - set-control: { part-id: touch, control: touched, value: 0 }
