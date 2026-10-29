@@ -29,8 +29,9 @@ M5Unified then takes the board from `Display.getBoard()`. `board_M5Dial == 12` (
 Everything the simulation does differently from the device build:
 
 1. **Panel MISO route (`-DM5DD_SIM`, which `tools/sim.sh` always sets).**
-   `m5dd_sim_route_panel_miso()` in `examples/DialProbe/sim_shims.h` runs before `M5Dial.begin()`.
-   It calls `esp_rom_gpio_connect_in_signal(GPIO_NUM_5, FSPIQ_IN_IDX, false)`. Task 4 moves it into `m5dd::begin`.
+   `m5dd::begin()` (`libraries/M5DialDemo/src/m5dd_begin.cpp`, `sim_route_panel_miso()`) runs it before `M5Dial.begin()`,
+   so every sketch that uses `m5dd::begin` gets it (Task 4; it was `examples/DialProbe/sim_shims.h` before).
+   It calls `esp_rom_gpio_connect_in_signal(GPIO_NUM_5, FSPIQ_IN_IDX, false)`.
    - Why: in 3-wire (SIO) mode, Wokwi's ESP32-S3 SPI samples the FSPIQ (MISO) input, not FSPID.
      M5GFX leaves FSPIQ unrouted, so the RDDID read returns `00000000` and autodetect fails.
    - On real hardware, SIO mode reads FSPID and ignores FSPIQ. The route is compiled only into the sim build anyway.
@@ -168,8 +169,9 @@ turns. The diagram therefore has no KY-040 (both would drive GPIO40/41).
 
 With A on GPIO41 (`ENCODER` pin1) leading B on GPIO40, PJRC's state table counts down: from rest
 (both high) A falls -> state `1011b` -> `position--` (Encoder.h `update()`), so one clockwise detent
-gives raw `-4`. DialProbe prints `steps = detents * M5DD_ENCODER_CW_SIGN` with `-1`, so clockwise
-logs `enc: steps=1 raw=-4`. The encoder steps of `probe.test.yaml` are the check in the simulator; which
+gives raw `-4`. `M5DD_ENCODER_CW_SIGN` lives in `libraries/M5DialDemo/src/config.h`; `EncoderDetent`
+multiplies by it, so clockwise logs e.g. `enc: steps=1 total=1 raw=-1` (EncoderDetent floors: the step
+comes on the first edge of a clockwise detent). The encoder steps of `probe.test.yaml` are the check in the simulator; which
 physical direction is "A leads" on the real knob is confirmed in Task 19's physical check.
 
 ### DialProbe
@@ -178,9 +180,11 @@ physical direction is "A leads" on the real knob is confirmed in Task 19's physi
 It logs `init: board <n>` (12 = M5Dial, i.e. the panel was autodetected), `init: display WxH`, `init: rtc|touch|rfid ok|fail` (RTC: `Rtc.isEnabled()`; touch: VENDID
 `A8h` non-zero; RFID: VersionReg not 00h/FFh), `probe: ready`, then `enc:`, `btn:`, `touch:`,
 `rtc:` (1 Hz) and `rfid: uid=` (card halted after each read, so it is logged once per presentation).
-The encoder is polled in the loop. An RFID poll without a card blocks the loop for the reader's
-25 ms timeout (every 250 ms), so the encoder scenario turns with `edgeIntervalUs = 40000`; Task 4's
-interrupt-driven `DialEncoder` removes that limit.
+Since Task 4 it starts with `m5dd::begin("DialProbe", canvas)` (logs `boot: DialProbe`), counts the
+encoder with the interrupt-driven `dialEncoder` + `EncoderDetent`, logs `enc: steps=<n> total=<sum> raw=<n>`
+and pushes its full canvas every loop as deliberate load. The "encoder fast" steps of `probe.test.yaml`
+turn 20 detents at 0.5 ms per edge under that load and check the totals (`total=20`, then
+`total=-20 raw=80`). The slow encoder steps keep `edgeIntervalUs = 40000` (direction/detent check only).
 
 ### Sim-only differences (additions)
 
