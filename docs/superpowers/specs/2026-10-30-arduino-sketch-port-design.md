@@ -279,8 +279,8 @@ Phase 3 — wrap-up
 - Original ESP-IDF tree left untouched.
 - Exact pinned versions of board package and libraries chosen at implementation time (latest stable, recorded in SETUP.md).
 - Factory test Wi-Fi/BLE steps stay disabled as in the original.
-- `encoder_detent.h` (pure count→step math) and `DialEncoder` (D12) are the only shared helpers
-  touching hardware input. Logging via M5Unified's `M5_LOGx`.
+- Shared input helpers: `DialEncoder` (D12) is the only one that touches hardware input;
+  `encoder_detent.h` is pure count→step math. Logging via M5Unified's `M5_LOGx`.
 - BLE verified from the Mac with `bleak` instead of a phone.
 
 ## 9. Left to the builder

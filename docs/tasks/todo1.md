@@ -75,6 +75,7 @@ sketch/
 - `find_port.py [--vidpid 303A:1001]` → prints port, exit 0; else exit 2 with `no M5Dial found (VID:PID 303A:1001). Plug in, or hold the knob button while plugging in for download mode.`
 - `build.sh <sketch-dir>` → `arduino-cli compile --config-file sketch/arduino-cli.yaml --fqbn "$M5DIAL_FQBN" --build-path sketch/.build/<Name> <dir>`; FQBN in `deps.txt` (expected `m5stack:esp32:m5stack_dial`; confirm via `arduino-cli board listall dial`). Outputs `<Name>.ino.elf` / `.bin` there.
 - `upload.sh <sketch-dir> [port]`, `monitor.sh [port]`.
+- `tools/env.sh` — sourced by **every** tool script (not by the user): prepends `sketch/tools/bin` to `PATH`, exports `WASI_SDK_PATH=sketch/tools/wasi-sdk`, activates nothing else; so `build.sh`, `sim.sh` etc. work from a fresh shell after a one-time `setup.sh`.
 - `device_test.py <sketch-dir> --expect <regex>... [--forbid <regex>...] [--timeout 20] [--no-upload]` → upload, reset via RTS, pass when all `--expect` match in order and no `--forbid` matched; prints log; exit 1 listing unmatched.
 - VSCode tasks `Build`, `Upload`, `Monitor`, `Build+Upload+Monitor`, `Device test`, `Host tests` with `${input:sketch}` pick-list.
 
@@ -121,7 +122,7 @@ sketch/
 
 ### Task 4: Shared library core  *(issue 4)*
 
-**Files:** `libraries/M5DialDemo/{library.properties,src/M5DialDemo.h,src/config.h,src/app_context.h,src/encoder_detent.h,src/m5dd_begin.{h,cpp},src/mooncake/*}`, `test/host/test_encoder_detent.cpp`, `sketch/tools/test_host.sh`. Update DialProbe to use the library.
+**Files:** `libraries/M5DialDemo/{library.properties,src/M5DialDemo.h,src/config.h,src/app_context.h,src/quadrature_decoder.h,src/dial_encoder.{h,cpp},src/encoder_detent.h,src/m5dd_begin.{h,cpp},src/mooncake/*}`, `test/host/test_quadrature_decoder.cpp`, `test/host/test_encoder_detent.cpp`, `sketch/tools/test_host.sh`. Update DialProbe to use the library.
 
 **Interfaces — Produces:**
 - `library.properties`: `name=M5DialDemo`, `depends=M5Dial,M5Unified,M5GFX`, `architectures=esp32`.
@@ -155,7 +156,7 @@ sketch/
 
 Common rules for Tasks 6–16:
 - Port = copy original app + gui into `src/apps/<app>/`, then replace every hardware call per spec §5.2 (no wrappers), `VideoShit`→`TempDemo`, `LGFX_Sprite`→`M5Canvas`, `_log/printf`→`M5_LOGI`.
-- Standalone sketch = `m5dd::begin("<Sketch>", canvas); m5dd::runStandalone(app, ctx);` (~15 lines).
+- Standalone sketch = `m5dd::begin("<Sketch>", canvas); m5dd::runStandalone(app, ctx);` (~15 lines). Exception: `MemSoak` (Task 14) does not use `runStandalone` (which restarts on close).
 - Every app logs `app: open <Name>` in `onCreate` and `app: close <Name>` in `onDestroy`.
 - Scenarios live in `sim/scenarios/<Sketch>/`; device smoke = `device_test.py <sketch> --expect 'boot: <Sketch>' 'app: open <Name>'`.
 
@@ -202,7 +203,7 @@ Common rules for Tasks 6–16:
 ### Task 13: BLE server  *(issue 13)*
 
 **Files:** `src/apps/ble_server/{app_ble_server.*,gui/*,ble_heart_rate.{h,cpp}}`, `examples/BleServer`, `tools/ble_check.py`.
-**Interfaces:** `class BleHeartRateServer { void begin(const char* deviceName); bool isConnected() const; bool isSubscribed() const; uint8_t lastValue() const; void loop(); }` on NimBLE-Arduino (`NimBLEDevice`, `NimBLEServerCallbacks`, `NimBLECharacteristicCallbacks`). Services/values from `gatt_svr.c`/`ble_demo.c`: HRS `0x180D` (`0x2A37` notify, `0x2A38` read), Device Info `0x180A` (`0x2A29`, `0x2A24`), same device name, notify interval and counter behaviour. Logs `ble: advertising <name>`, `ble: connected=0|1`, `ble: subscribed=0|1`.
+**Interfaces:** `class BleHeartRateServer { void begin(const char* deviceName); bool isConnected() const; bool isSubscribed() const; uint8_t lastValue() const; void loop(); void end(); }` — `end()` stops advertising, disconnects and calls `NimBLEDevice::deinit(true)` to release the NimBLE heap; the BLE app's `onDestroy` calls `end()` (mirrors Wi-Fi's `WiFi.mode(WIFI_OFF)`) on NimBLE-Arduino (`NimBLEDevice`, `NimBLEServerCallbacks`, `NimBLECharacteristicCallbacks`). Services/values from `gatt_svr.c`/`ble_demo.c`: HRS `0x180D` (`0x2A37` notify, `0x2A38` read), Device Info `0x180A` (`0x2A29`, `0x2A24`), same device name, notify interval and counter behaviour. Logs `ble: advertising <name>`, `ble: connected=0|1`, `ble: subscribed=0|1`.
 `ble_check.py --name <name> [--notifications 3] [--timeout 30]` (bleak): scan → connect → read 0x2A38 → subscribe 0x2A37 → exit 0 after N notifications with increasing counter.
 - [ ] **Step 1:** Port. No sim scenario (Wokwi has no BLE); record BLE as device-only in PORTING_NOTES.
 - [ ] **Step 2: Device test:** `device_test.py examples/BleServer --expect 'ble: advertising'` then (no upload) run `ble_check.py` while `device_test.py --no-upload --expect 'ble: connected=1' 'ble: subscribed=1'` → both PASS.
@@ -211,7 +212,7 @@ Common rules for Tasks 6–16:
 ### Task 14: More menu, power, memory soak, partitions  *(issue 14)*
 
 **Files:** `src/apps/more_menu/**` (drop the three LVGL entries + `lv_demos.h`), `examples/MemSoak/MemSoak.ino`, scenarios.
-**Interfaces:** Power Off → `M5Dial.Power.powerOff()` (log `power: off` first). `MemSoak`: programmatically runs WifiScan app (until `ap_count`), destroys it, BleServer app (5 s), destroys it, ×3; logs `heap: free=<n> min=<n>` after each; ends with `soak: done`.
+**Interfaces:** Power Off → `M5Dial.Power.powerOff()` (log `power: off` first). `MemSoak`: own non-restarting driver — for each app: `new`, `setUserData(&ctx)`, `onSetup/onCreate`, loop `M5Dial.update(); onRunning()` until its done-condition, `onDestroy`, `delete` — programmatically runs WifiScan app (until `ap_count`), destroys it, BleServer app (5 s), destroys it, ×3; logs `heap: free=<n> min=<n>` after each; ends with `soak: done`.
 - [ ] **Step 1: Failing scenarios:** `more_menu_quit.test.yaml` (Quit → back to `launcher: ready`); `power_off.test.yaml` (`power: off` logged; sim end accepted).
 - [ ] **Step 2:** Port → PASS.
 - [ ] **Step 3: Soak (Review Focus 5):** `device_test.py examples/MemSoak --expect 'soak: done' --forbid 'boot: MemSoak.*boot: MemSoak' --timeout 180` → PASS (no reboot); record min heap in PORTING_NOTES.
