@@ -35,14 +35,38 @@ steps:
 
   # --- encoder: one clockwise detent -> steps=1, one counter-clockwise -> steps=-1
   # `steps` emits that many detents (positive = clockwise, A leads B); 0 re-arms it.
-  # why: edgeIntervalUs 40 ms - DialProbe polls the encoder (no interrupts until Task 4) and an
-  # RFID poll without a card blocks its loop for the 25 ms reader timeout.
+  # why: edgeIntervalUs 40 ms - a slow, unambiguous turn; checks direction and detent size only
+  # (the fast steps below check counting under load).
   - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
   - set-control: { part-id: enc, control: steps, value: 1 }
   - wait-serial: 'enc: steps=1 '
   - set-control: { part-id: enc, control: steps, value: 0 }
   - set-control: { part-id: enc, control: steps, value: -1 }
   - wait-serial: 'enc: steps=-1 '
+
+  # --- encoder fast (Review Focus 2): 20 quick clockwise detents while DialProbe pushes its
+  # full 240x240 canvas every loop; the interrupt-driven DialEncoder must count every edge.
+  # State here: raw 0, total 0. `enc:` lines carry total = sum of all steps.
+  # why edgeIntervalUs 500: an edge every 0.5 ms, ~20+ edges per canvas push - a polled
+  # encoder (M5Dial.Encoder on GPIO40/41) loses or mis-guesses edges at this rate.
+  # why check totals, not lines: wait-serial cannot assert that a line is absent. Counting is
+  # exact and each leg turns one way only, so a negative step needs a miscount, which shows
+  # up in the total.
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 500 }
+  - set-control: { part-id: enc, control: steps, value: 20 }
+  - wait-serial: 'total=20 raw='
+  # why the way back: EncoderDetent floors, so clockwise (raw counts down, CW_SIGN -1) reaches
+  # total=20 already at raw -77; 40 counter-clockwise detents end at total=-20 only when raw is
+  # exactly +80, which checks every edge of all 60 fast detents. 'total=-20 raw=80' is unique
+  # in this scenario. The delays let the chip (polls `steps` every 1 ms) see each value.
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 10ms
+  - set-control: { part-id: enc, control: steps, value: -20 }
+  - delay: 200ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 10ms
+  - set-control: { part-id: enc, control: steps, value: -20 }
+  - wait-serial: 'total=-20 raw=80'
 
   # --- rfid: card DE:AD:BE:EF (REQA, CL1 anticollision, SELECT)
   - set-control: { part-id: rfid, control: uid0, value: 222 }

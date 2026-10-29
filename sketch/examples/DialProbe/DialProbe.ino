@@ -7,39 +7,35 @@
  * and on the device (tools/device_test.py), so sim and hardware can be compared directly.
  *
  * Log lines (tag: message):
+ *   boot: DialProbe               (m5dd::begin)
  *   init: board <n> | init: display <w>x<h> | init: rtc ok|fail | init: touch ok|fail | init: rfid ok|fail
  *   probe: ready
- *   enc: steps=<+-n> raw=<n>      (clockwise = positive steps)
+ *   enc: steps=<+-n> total=<+-n> raw=<n>  (clockwise = positive; total = sum of all steps)
  *   btn: pressed|released
  *   touch: x=<n> y=<n>
  *   rtc: YYYY-MM-DD HH:MM:SS      (1 Hz)
  *   rfid: uid=<HEX:HEX:..>
  */
-#include <M5Dial.h>
-#include "sim_shims.h"
+#include <M5DialDemo.h>
 
-/**
- * Sign that turns a raw clockwise encoder count into a positive step.
- * why: M5Dial 1.0.3's ENCODER(pin1 = GPIO41/A, pin2 = GPIO40/B) counts down when A leads B.
- * Derived from PJRC's quadrature state table (Encoder.h update()); to be confirmed by the
- * encoder steps of sim/scenarios/DialProbe/probe.test.yaml and Task 19's physical check.
- * See docs/PORTING_NOTES.md.
- */
-#ifndef M5DD_ENCODER_CW_SIGN
-#define M5DD_ENCODER_CW_SIGN (-1)
-#endif
+// why: explicit prototypes. Without them arduino-cli 1.5.1's prototype generator (confused by
+// this sketch's layout) inserted `setup(); loop();` *inside* setup()'s body, so setup()
+// recursed forever (gcc -Winfinite-recursion; .build/<Name>/sketch/<Name>.ino.cpp shows it).
+void setup();
+void loop();
 
 namespace {
 
 constexpr uint8_t TOUCH_I2C_ADDR = 0x38;  ///< FT3267, M5GFX.cpp:1987
 constexpr uint8_t TOUCH_REG_VENDID = 0xA8; ///< FT5x06 vendor id, Touch_FT5x06.inl:34
 constexpr uint8_t RFID_REG_VERSION = 0x37; ///< MFRC522 VersionReg
-constexpr int32_t COUNTS_PER_DETENT = 4;   ///< x4 quadrature decoding, one cycle per detent
 constexpr uint32_t RTC_PERIOD_MS = 1000;
 constexpr uint32_t RFID_PERIOD_MS = 250;
 
+M5Canvas canvas(&M5Dial.Display);
+EncoderDetent detent;  ///< M5DD_ENCODER_COUNTS_PER_DETENT / M5DD_ENCODER_CW_SIGN from config.h
 bool rfid_ok = false;
-int32_t enc_base = 0;   ///< raw count of the last whole detent
+int32_t enc_total = 0;  ///< sum of all logged steps (probe.test.yaml "encoder fast" checks it)
 uint32_t rtc_next_ms = 0;
 uint32_t rfid_next_ms = 0;
 
@@ -60,17 +56,27 @@ bool probe_rfid() {
     return probe_reg(RC522_I2C_ADDRESS, RFID_REG_VERSION, &v, 100000) && v != 0x00 && v != 0xFF;
 }
 
-/**
- * Turn the raw x4 count into whole detents relative to the last logged detent and log them.
- * why: relative to the last detent (not raw / 4), so detents around count 0 are as wide as
- * any other (truncating division has a double-wide dead zone there).
- */
+/** Log the detent steps (clockwise positive) the interrupt-counted encoder moved since the last poll. */
 void poll_encoder() {
-    int32_t raw = M5Dial.Encoder.read();
-    int32_t steps = 0;
-    while (raw - enc_base >= COUNTS_PER_DETENT) { enc_base += COUNTS_PER_DETENT; ++steps; }
-    while (raw - enc_base <= -COUNTS_PER_DETENT) { enc_base -= COUNTS_PER_DETENT; --steps; }
-    if (steps != 0) M5_LOGI("enc: steps=%d raw=%d", (int)(steps * M5DD_ENCODER_CW_SIGN), (int)raw);
+    int32_t raw = dialEncoder.read();
+    int32_t steps = detent.update(raw);
+    if (steps == 0) return;
+    enc_total += steps;
+    M5_LOGI("enc: steps=%d total=%d raw=%d", (int)steps, (int)enc_total, (int)raw);
+}
+
+/**
+ * Redraw the canvas and push it to the panel.
+ * why: called every loop on purpose - a full 240x240 push takes ~10-20 ms, the load under
+ * which a polled encoder loses edges (Review Focus 2); the "encoder fast" steps of
+ * probe.test.yaml check that DialEncoder does not.
+ */
+void draw() {
+    canvas.fillSprite(TFT_BLACK);
+    canvas.setTextColor(TFT_WHITE);
+    canvas.drawCenterString("DialProbe", 120, 100);
+    canvas.drawCenterString(String(enc_total), 120, 124);
+    canvas.pushSprite(0, 0);
 }
 
 /** Log front-button edges (M5Unified BtnA, GPIO42). */
@@ -114,21 +120,12 @@ void poll_rfid(uint32_t now) {
 
 }  // namespace
 
-/** Bring up the M5Dial, probe each peripheral and log the result. */
+/**
+ * Bring up the M5Dial (m5dd::begin, which also initialises RFID), probe each peripheral
+ * and log the result; the RFID probe only reports whether the reader answers.
+ */
 void setup() {
-#ifdef M5DD_SIM
-    m5dd_sim_route_panel_miso();  // sim-only, see sim_shims.h
-#endif
-    auto cfg = M5.config();
-    // why: RFID is initialised below only if the reader answers; MFRC522::PCD_Reset() spins
-    // forever on an unanswered (uninitialised) CommandReg read.
-    M5Dial.begin(cfg, /*enableEncoder*/ true, /*enableRFID*/ false);
-    // why: M5Unified's default serial log level comes from CORE_DEBUG_LEVEL (0 in this core's
-    // default build), so INFO must be enabled explicitly.
-    M5.Log.setLogLevel(m5::log_target_serial, ESP_LOG_INFO);
-    // why: HWCDC drops output until the USB host reconnects after a reset, so wait (bounded)
-    // for it or the one-shot init: lines are lost. Use the same idiom in m5dd::begin.
-    while (!Serial && millis() < 3000) delay(10);
+    m5dd::begin("DialProbe", canvas);
 
     // why: board 12 = board_M5Dial, i.e. M5GFX autodetected the (virtual) panel
     M5_LOGI("init: board %d", (int)M5.getBoard());
@@ -136,20 +133,14 @@ void setup() {
     M5_LOGI("init: rtc %s", M5Dial.Rtc.isEnabled() ? "ok" : "fail");
     M5_LOGI("init: touch %s", probe_touch() ? "ok" : "fail");
     rfid_ok = probe_rfid();
-    if (rfid_ok) M5Dial.Rfid.PCD_Init();
     M5_LOGI("init: rfid %s", rfid_ok ? "ok" : "fail");
 
-    M5Dial.Display.fillScreen(TFT_BLACK);
-    M5Dial.Display.drawCenterString("DialProbe", 120, 110);
-    enc_base = M5Dial.Encoder.read();
+    draw();
+    detent.reset(dialEncoder.read());
     M5_LOGI("probe: ready");
 }
 
-/**
- * Poll every input. The encoder is read in a tight loop without redraws.
- * why: M5Dial 1.0.3's ENCODER attaches no interrupts on GPIO40/41, so read() polls the pins;
- * Task 4 replaces it with the interrupt-driven DialEncoder.
- */
+/** Poll every input, then redraw (see draw() for why every loop). */
 void loop() {
     M5Dial.update();
     uint32_t now = millis();
@@ -158,4 +149,5 @@ void loop() {
     poll_touch();
     poll_rtc(now);
     poll_rfid(now);
+    draw();
 }
