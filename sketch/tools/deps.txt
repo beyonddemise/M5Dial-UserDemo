@@ -6,6 +6,9 @@
 M5DIAL_CORE=m5stack:esp32
 M5DIAL_CORE_VERSION=3.3.10
 M5DIAL_FQBN=m5stack:esp32:m5stack_dial
+# why: board default is CDCOnBoot=Disabled (boards.txt m5stack_dial.menu.CDCOnBoot.default),
+# which leaves Serial/M5_LOG off the native USB port. Appended to the FQBN by env.sh.
+M5DIAL_FQBN_OPTIONS=CDCOnBoot=cdc
 
 # --- Arduino libraries (name@version, quoted: values contain spaces; lvgl is 9.x) ---------------------------
 LIB_M5DIAL="M5Dial@1.0.3"
@@ -26,3 +29,13 @@ PY_BLEAK=1.1.1
 # --- Simulation toolchain -----------------------------------------------------
 WOKWI_CLI_VERSION=0.29.1
 WASI_SDK_VERSION=34
+
+# sha256 of the release assets (from the GitHub release digests), checked by setup.sh
+WOKWI_SHA256_macos_arm64=94da96ee53af922506f0e4d3eb9bec0684a786c8fe27dc114cc84d27f653eb3d
+WOKWI_SHA256_macos_x64=27642917590f25f8d7671e5542cd9280a0397b9e326f336c14f72f4a26996cb3
+WOKWI_SHA256_linuxstatic_arm64=ef442aad00f5cc2878dd239e77b1b3ca72c3f3292390b151b0d8818733b3eeee
+WOKWI_SHA256_linuxstatic_x64=3c9d6da007d008a3822ab468318037285440055132c59fd659d7306e40f14258
+WASI_SHA256_arm64_macos=9c59398106b417f8f14913380fdf0097a8cc0ff4af9eb3ce0065a859e88d49e9
+WASI_SHA256_x86_64_macos=87d27fa8adc68dee59bfbf2e22a6d34ef717c34d6bf1d8af2a56fc929d9ce0eb
+WASI_SHA256_arm64_linux=f7e243dff54d60bcc576e94d6166b69f410f2500ae4a9ceef34315be10e77971
+WASI_SHA256_x86_64_linux=b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4

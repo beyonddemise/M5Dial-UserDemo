@@ -5,7 +5,7 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
 
 | Item | Pin |
 |---|---|
-| Core | `m5stack:esp32` 3.3.10 (FQBN `m5stack:esp32:m5stack_dial`) |
+| Core | `m5stack:esp32` 3.3.10 (FQBN `m5stack:esp32:m5stack_dial`, option `CDCOnBoot=cdc` so serial logs reach USB) |
 | Libraries | M5Dial 1.0.3, M5Unified 0.2.28, M5GFX 0.2.35, NimBLE-Arduino 2.5.2, Adafruit NeoPixel 1.15.5, lvgl 9.6.0 |
 | Python (venv) | pyserial 3.5, pillow 11.3.0, esptool 4.12.0, bleak 1.1.1 |
 | Simulation | wokwi-cli 0.29.1, wasi-sdk 34 |
@@ -13,14 +13,18 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
 1. **Install arduino-cli:** `brew install arduino-cli` (macOS). Other OS: see the arduino-cli docs.
 2. **Run the one-time setup:** `sketch/tools/setup.sh`. It creates `tools/.venv`, downloads
    wokwi-cli into `tools/bin/` and wasi-sdk into `tools/wasi-sdk/`, then installs the M5Stack
-   core and all libraries into the project-local `sketch/.arduino/`. Nothing global is modified.
+   core into the project-local `sketch/.arduino/` and the libraries into `sketch/libraries/`
+   (git-ignored; `sketch/` is the Arduino sketchbook). It may `brew install` arduino-cli and,
+   on Apple Silicon without Rosetta, universal-ctags; those are global. Downloaded wokwi-cli and
+   wasi-sdk are verified against the sha256 pins in deps.txt.
    Every tool script sources `tools/env.sh`, so no shell activation is needed afterwards.
 3. **Apple Silicon without Rosetta:** setup.sh swaps arduino-cli's bundled x86_64 `ctags` for
    `universal-ctags` (Homebrew); otherwise builds fail with `bad CPU type in executable`.
 4. **Back up the factory flash (once, before any upload):** connect the M5Dial via USB-C, then
    `sketch/tools/backup_flash.sh`. It writes `sketch/backup/m5dial-factory-<date>.bin`
-   (exactly 8 388 608 bytes) plus `.sha256`. `upload.sh` refuses to run without a backup.
-   `tools/restore_flash.sh <file>` writes it back (destructive; verifies the checksum first).
+   (exactly 8 388 608 bytes) plus `.sha256`, written as `.partial` and renamed only once verified.
+   `upload.sh` refuses to run unless such a verified pair exists (`tools/check_backup.sh`).
+   `tools/restore_flash.sh <file> --yes` writes it back (destructive; verifies size and checksum first).
 5. **Build:** `sketch/tools/build.sh sketch/examples/Smoke` (output in `sketch/.build/Smoke/`).
 6. **Upload:** `sketch/tools/upload.sh sketch/examples/Smoke`. The port is auto-detected by USB
    VID:PID `303A:1001`. If none is found, plug the cable in, or hold the knob button while

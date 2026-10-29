@@ -11,7 +11,7 @@
     { "label": "Build+Upload+Monitor", "dependsOrder": "sequence",
       "dependsOn": ["Upload", "Monitor"], "problemMatcher": [] },
     { "label": "Device test", "type": "shell",
-      "command": "${workspaceFolder}/tools/.venv/bin/python ${workspaceFolder}/tools/device_test.py ${input:sketch} --expect ${input:expect}",
+      "command": "${workspaceFolder}/tools/.venv/bin/python ${workspaceFolder}/tools/device_test.py ${input:sketch} --expect \"${input:expect}\"",
       "problemMatcher": [] },
     { "label": "Host tests", "type": "shell",
       "command": "${workspaceFolder}/tools/.venv/bin/python -m unittest discover ${workspaceFolder}/tools/tests",

@@ -8,7 +8,8 @@
 /** Initialise the M5Dial and emit the marker line checked by device_test.py. */
 void setup() {
     M5Dial.begin();
-    // why: M5Unified's serial log target defaults to ERROR-only; open it up to INFO
+    // why: M5Unified's default serial log level comes from CORE_DEBUG_LEVEL (0 = none
+    // in this core's default build), so INFO must be enabled explicitly.
     M5.Log.setLogLevel(m5::log_target_serial, ESP_LOG_INFO);
     M5Dial.Display.fillScreen(TFT_GREEN);
     M5_LOGI("boot: smoke");

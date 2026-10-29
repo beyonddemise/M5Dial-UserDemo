@@ -34,6 +34,14 @@ case "$os-$arch" in
   *) echo "unsupported host $os-$arch (Windows: use WSL2)" >&2; exit 1 ;;
 esac
 
+# verify_sha256 <file> <expected>: abort (and delete the file) on mismatch
+verify_sha256() {
+  local got; got="$(shasum -a 256 "$1" | cut -d' ' -f1)"
+  if [ "$got" != "$2" ]; then rm -f "$1"; echo "sha256 mismatch for $(basename "$1"): $got != $2" >&2; exit 1; fi
+}
+# indirect lookup of pinned hashes from deps.txt (keys use '_' instead of '-')
+pinned() { local k="$1_${2//-/_}"; echo "${!k:?no pinned sha256 $k in deps.txt}"; }
+
 # --- 3. wokwi-cli -----------------------------------------------------------------------
 # why: same release asset the official installer (wokwi.com/ci/install.sh) fetches, but
 # pinned and kept inside the project instead of ~/.wokwi + a ~/bin symlink.
@@ -41,6 +49,7 @@ mkdir -p "$TOOLS_DIR/bin"
 if [ "$("$TOOLS_DIR/bin/wokwi-cli" --short-version 2>/dev/null || true)" != "$WOKWI_CLI_VERSION" ]; then
   curl -fsSL -o "$TOOLS_DIR/bin/wokwi-cli" \
     "https://github.com/wokwi/wokwi-cli/releases/download/v$WOKWI_CLI_VERSION/wokwi-cli-$wokwi_t"
+  verify_sha256 "$TOOLS_DIR/bin/wokwi-cli" "$(pinned WOKWI_SHA256 "$wokwi_t")"
   chmod +x "$TOOLS_DIR/bin/wokwi-cli"
 fi
 
@@ -49,6 +58,7 @@ if [ ! -x "$WASI_SDK_PATH/bin/clang" ]; then
   tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
   curl -fsSL -o "$tmp/wasi.tgz" \
     "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$WASI_SDK_VERSION/wasi-sdk-$WASI_SDK_VERSION.0-$wasi_t.tar.gz"
+  verify_sha256 "$tmp/wasi.tgz" "$(pinned WASI_SHA256 "$wasi_t")"
   mkdir -p "$WASI_SDK_PATH"
   tar -xzf "$tmp/wasi.tgz" -C "$WASI_SDK_PATH" --strip-components=1
 fi
@@ -68,12 +78,14 @@ done
 if [ "$os-$arch" = Darwin-arm64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
   command -v ctags >/dev/null && ctags --version 2>/dev/null | grep -q Universal \
     || brew install universal-ctags
+  shopt -s nullglob  # why: no ctags dir yet (fresh data dir) must not run the loop on a literal glob
   for d in "$ARDUINO_DIRECTORIES_DATA"/packages/builtin/tools/ctags/*/; do
     [ -L "$d/ctags" ] || { mv "$d/ctags" "$d/ctags.x86_64"; ln -s "$(brew --prefix)/bin/ctags" "$d/ctags"; }
   done
+  shopt -u nullglob
 fi
 
 echo "== versions =="
-"$TOOLS_DIR/bin/wokwi-cli" --short-version
+"$TOOLS_DIR/bin/wokwi-cli" --version
 "$WASI_SDK_PATH/bin/clang" --version | head -1
 acli lib list

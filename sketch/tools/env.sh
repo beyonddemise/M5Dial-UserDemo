@@ -21,9 +21,15 @@ export ARDUINO_CLI_CONFIG
 # why: absolute paths so every script works from any cwd (yaml paths are cwd-relative)
 export ARDUINO_DIRECTORIES_DATA="$SKETCH_ROOT/.arduino/data"
 export ARDUINO_DIRECTORIES_DOWNLOADS="$SKETCH_ROOT/.arduino/staging"
-export ARDUINO_DIRECTORIES_USER="$SKETCH_ROOT/.arduino/user"
+# why: /sketch is the Arduino sketchbook, so sketch/libraries/* (our M5DialDemo) is found
+# automatically; third-party libs installed by setup.sh also land in sketch/libraries/
+# (git-ignored there except M5DialDemo/).
+export ARDUINO_DIRECTORIES_USER="$SKETCH_ROOT"
 
 set -a
 # shellcheck disable=SC1091
 . "$TOOLS_DIR/deps.txt"
 set +a
+# FQBN including board options (e.g. USB CDC on boot) - use this for compile/upload
+M5DIAL_FQBN_FULL="$M5DIAL_FQBN${M5DIAL_FQBN_OPTIONS:+:$M5DIAL_FQBN_OPTIONS}"
+export M5DIAL_FQBN_FULL

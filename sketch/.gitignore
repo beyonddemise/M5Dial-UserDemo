@@ -1,5 +1,9 @@
 # Project-local toolchain and build output (all re-creatable by tools/setup.sh)
 .arduino/
+# sketch/ is the Arduino sketchbook: arduino-cli installs third-party libraries into
+# libraries/. Ignore all of them; only our own M5DialDemo (Task 4) is tracked.
+libraries/*
+!libraries/M5DialDemo/
 .build/
 backup/
 tools/.venv/

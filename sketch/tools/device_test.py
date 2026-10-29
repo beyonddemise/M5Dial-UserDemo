@@ -25,6 +25,8 @@ import find_port as fp
 
 TOOLS = Path(__file__).resolve().parent
 BAUD = 115200
+NO_DEVICE_MSG = ("no M5Dial found (VID:PID 303A:1001). Plug in, or hold the knob button "
+                 "while plugging in for download mode.")
 
 
 def evaluate(log: str, expects: List[str], forbids: List[str]) -> List[str]:
@@ -97,14 +99,22 @@ def main(argv: Optional[list] = None) -> int:
 
     port = fp.find_port(fp.DEFAULT_VIDPID)
     if port is None:
-        fp.main([])  # prints the standard hint
+        print(NO_DEVICE_MSG, file=sys.stderr)
         return 2
     if not args.no_upload:
-        subprocess.run([str(TOOLS / "upload.sh"), args.sketch, port], check=True)
+        try:
+            subprocess.run([str(TOOLS / "upload.sh"), args.sketch, port], check=True)
+        except subprocess.CalledProcessError as exc:
+            print(f"FAIL: upload failed (exit {exc.returncode})", file=sys.stderr)
+            return 1
         # why: the port node can change after the post-upload hard reset
         time.sleep(1.5)
         port = fp.find_port(fp.DEFAULT_VIDPID) or port
-    log = capture(port, args.expect, stop_early=not args.forbid, timeout=args.timeout)
+    try:
+        log = capture(port, args.expect, stop_early=not args.forbid, timeout=args.timeout)
+    except serial.SerialException as exc:
+        print(f"FAIL: serial port {port} unusable: {exc}", file=sys.stderr)
+        return 1
     print(log)
     problems = evaluate(log, args.expect, args.forbid)
     if problems:

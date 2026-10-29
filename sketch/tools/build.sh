@@ -7,5 +7,5 @@ set -euo pipefail
 . "$(dirname "$0")/env.sh"
 [ $# -ge 1 ] || { echo "usage: build.sh <sketch-dir>" >&2; exit 64; }
 dir="$(cd "$1" && pwd)"; name="$(basename "$dir")"
-exec arduino-cli compile --config-file "$ARDUINO_CLI_CONFIG" --fqbn "$M5DIAL_FQBN" \
+exec arduino-cli compile --config-file "$ARDUINO_CLI_CONFIG" --fqbn "$M5DIAL_FQBN_FULL" \
   --build-path "$SKETCH_ROOT/.build/$name" "${@:2}" "$dir"
