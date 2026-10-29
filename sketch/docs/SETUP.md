@@ -41,7 +41,7 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    VID:PID `303A:1001`. If none is found, plug the cable in, or hold the knob button while
    plugging in to enter download mode.
 7. **Check on the device:**
-   `sketch/tools/.venv/bin/python sketch/tools/device_test.py sketch/examples/DialProbe --expect 'init: display 240x240' 'init: rtc ok' 'init: touch ok' 'init: rfid ok' 'rtc: 20'`
+   `sketch/tools/.venv/bin/python sketch/tools/device_test.py sketch/examples/DialProbe --expect 'boot: DialProbe' 'init: rfid ok' 'init: display 240x240' 'init: rtc ok' 'init: touch ok' 'rtc: 20'`
    Serial monitor: `sketch/tools/monitor.sh` (115200 baud).
 8. **VSCode:** open the `sketch/` folder; tasks Build, Upload, Monitor, Build+Upload+Monitor,
    Device test and Host tests are in `.vscode/tasks.json`. Run `tools/gen_compile_commands.sh`

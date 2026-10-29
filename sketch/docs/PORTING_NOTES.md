@@ -170,21 +170,40 @@ turns. The diagram therefore has no KY-040 (both would drive GPIO40/41).
 With A on GPIO41 (`ENCODER` pin1) leading B on GPIO40, PJRC's state table counts down: from rest
 (both high) A falls -> state `1011b` -> `position--` (Encoder.h `update()`), so one clockwise detent
 gives raw `-4`. `M5DD_ENCODER_CW_SIGN` lives in `libraries/M5DialDemo/src/config.h`; `EncoderDetent`
-multiplies by it, so clockwise logs e.g. `enc: steps=1 total=1 raw=-1` (EncoderDetent floors: the step
-comes on the first edge of a clockwise detent). The encoder steps of `probe.test.yaml` are the check in the simulator; which
+multiplies by it, so clockwise logs e.g. `enc: steps=1 total=1 raw=-3`.
+
+### Encoder detents: centred window
+
+`EncoderDetent` index = `floor((raw + 2) / 4)`, so detent 0 covers raw -2..+1. The knob rests at
+raw = multiple of 4, i.e. in the middle of a window: +-1 contact chatter at rest never steps, and a
+step fires at the half-detent point (third edge clockwise, second edge counter-clockwise; with 4
+integer counts per detent the window cannot be exactly symmetric). The boundary itself (raw 2 mod 4)
+is mid-detent, where the knob does not rest, so moving back across it undoes the step. Floor (not
+truncating) division keeps detent 0 as wide as every other.
+
+### RFID presence probe (deviation from the plan)
+
+The plan has `m5dd::begin` call `M5Dial.begin(cfg, false, true)`. `MFRC522::PCD_Reset()` busy-waits
+on `CommandReg` (`while (PCD_ReadRegister(CommandReg) & (1<<4))`, M5Dial `utility/MFRC522.cpp`), and a
+failed I2C read leaves the value uninitialised, so a missing or dead reader would hang every sketch at
+boot. `m5dd::begin` therefore calls `M5Dial.begin(cfg, false, false)`, reads VersionReg `37h` at
+`RC522_I2C_ADDRESS` over `M5.In_I2C` (100 kHz) and calls `M5Dial.Rfid.begin()` (= `PCD_Init()`) only if
+the reader ACKs with a value other than 00h/FFh. It logs `init: rfid ok|missing`; sketches check
+`m5dd::rfidPresent()` before using `M5Dial.Rfid`. The encoder steps of `probe.test.yaml` are the check in the simulator; which
 physical direction is "A leads" on the real knob is confirmed in Task 19's physical check.
 
 ### DialProbe
 
 `examples/DialProbe` replaces Task 1/2's Smoke sketch; Smoke's `board: 12` check became `init: board 12`.
-It logs `init: board <n>` (12 = M5Dial, i.e. the panel was autodetected), `init: display WxH`, `init: rtc|touch|rfid ok|fail` (RTC: `Rtc.isEnabled()`; touch: VENDID
-`A8h` non-zero; RFID: VersionReg not 00h/FFh), `probe: ready`, then `enc:`, `btn:`, `touch:`,
+It logs `init: board <n>` (12 = M5Dial, i.e. the panel was autodetected), `init: display WxH`, `init: rtc|touch ok|fail` (RTC: `Rtc.isEnabled()`; touch: VENDID
+`A8h` non-zero; RFID: `init: rfid ok|missing` from `m5dd::begin`, VersionReg not 00h/FFh, logged before the others), `probe: ready`, then `enc:`, `btn:`, `touch:`,
 `rtc:` (1 Hz) and `rfid: uid=` (card halted after each read, so it is logged once per presentation).
-Since Task 4 it starts with `m5dd::begin("DialProbe", canvas)` (logs `boot: DialProbe`), counts the
-encoder with the interrupt-driven `dialEncoder` + `EncoderDetent`, logs `enc: steps=<n> total=<sum> raw=<n>`
-and pushes its full canvas every loop as deliberate load. The "encoder fast" steps of `probe.test.yaml`
-turn 20 detents at 0.5 ms per edge under that load and check the totals (`total=20`, then
-`total=-20 raw=80`). The slow encoder steps keep `edgeIntervalUs = 40000` (direction/detent check only).
+Since Task 4 it starts with `m5dd::begin("DialProbe", canvas)` (logs `boot: DialProbe` and
+`init: rfid ok|missing`), counts the encoder with the interrupt-driven `dialEncoder` + `EncoderDetent`,
+logs `enc: steps=<n> total=<sum> raw=<n>` per step and `enc: idle raw=<n> total=<sum>` once the knob has
+rested 100 ms, and pushes its full canvas every loop as deliberate load. The "encoder fast" steps of
+`probe.test.yaml` turn 20 detents at 0.5 ms per edge under that load and check the exact rest counts
+(`enc: idle raw=-80 total=20`, then after 40 detents back `enc: idle raw=80 total=-20`). The slow encoder steps keep `edgeIntervalUs = 40000` (direction/detent check only).
 
 ### Sim-only differences (additions)
 

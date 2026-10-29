@@ -8,12 +8,15 @@ name: 'DialProbe: all peripherals'
 version: 1
 steps:
   # --- init: board autodetect + every probe answers
+  # why this order: m5dd::begin logs `boot:` and the RFID presence probe before DialProbe's
+  # own init lines
+  - wait-serial: 'boot: DialProbe'
+  - wait-serial: 'init: rfid ok'
   # why: m5::board_t::board_M5Dial == 12 (M5GFX src/lgfx/boards.hpp:23), proves the display chip
   - wait-serial: 'init: board 12'
   - wait-serial: 'init: display 240x240'
   - wait-serial: 'init: rtc ok'
   - wait-serial: 'init: touch ok'
-  - wait-serial: 'init: rfid ok'
   - wait-serial: 'probe: ready'
 
   # --- rtc: starts from the host's UTC time (20xx) and ticks; DialProbe logs it at 1 Hz
@@ -46,19 +49,22 @@ steps:
 
   # --- encoder fast (Review Focus 2): 20 quick clockwise detents while DialProbe pushes its
   # full 240x240 canvas every loop; the interrupt-driven DialEncoder must count every edge.
-  # State here: raw 0, total 0. `enc:` lines carry total = sum of all steps.
+  # State here: raw 0, total 0. `enc:` step lines carry total = sum of all steps; DialProbe
+  # prints `enc: idle raw=<n> total=<n>` once the knob has rested for 100 ms.
   # why edgeIntervalUs 500: an edge every 0.5 ms, ~20+ edges per canvas push - a polled
   # encoder (M5Dial.Encoder on GPIO40/41) loses or mis-guesses edges at this rate.
-  # why check totals, not lines: wait-serial cannot assert that a line is absent. Counting is
-  # exact and each leg turns one way only, so a negative step needs a miscount, which shows
-  # up in the total.
+  # why the idle line: EncoderDetent's window is centred on the rest positions (detent 0 =
+  # raw -2..+1), so clockwise (raw counts down, CW_SIGN -1) reaches total=20 already at raw
+  # -79; only the raw count at rest is exact. `idle raw=-80 total=20` proves all 80 edges were
+  # counted and the steps sum to exactly +20 - with exact counting a one-way turn cannot
+  # produce a negative step (wait-serial cannot assert that a line is absent).
   - set-control: { part-id: enc, control: edgeIntervalUs, value: 500 }
   - set-control: { part-id: enc, control: steps, value: 20 }
-  - wait-serial: 'total=20 raw='
-  # why the way back: EncoderDetent floors, so clockwise (raw counts down, CW_SIGN -1) reaches
-  # total=20 already at raw -77; 40 counter-clockwise detents end at total=-20 only when raw is
-  # exactly +80, which checks every edge of all 60 fast detents. 'total=-20 raw=80' is unique
-  # in this scenario. The delays let the chip (polls `steps` every 1 ms) see each value.
+  - wait-serial: 'total=20 '
+  - wait-serial: 'enc: idle raw=-80 total=20'
+  # Back through 0 with 40 counter-clockwise detents: must rest at exactly raw +80, total -20.
+  # why two -20 turns: the `steps` control is limited to -20..20; the delays let the chip
+  # (polls `steps` every 1 ms) see each value. `idle raw=80 total=-20` is unique here.
   - set-control: { part-id: enc, control: steps, value: 0 }
   - delay: 10ms
   - set-control: { part-id: enc, control: steps, value: -20 }
@@ -66,7 +72,7 @@ steps:
   - set-control: { part-id: enc, control: steps, value: 0 }
   - delay: 10ms
   - set-control: { part-id: enc, control: steps, value: -20 }
-  - wait-serial: 'total=-20 raw=80'
+  - wait-serial: 'enc: idle raw=80 total=-20'
 
   # --- rfid: card DE:AD:BE:EF (REQA, CL1 anticollision, SELECT)
   - set-control: { part-id: rfid, control: uid0, value: 222 }

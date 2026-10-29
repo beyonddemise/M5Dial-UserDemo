@@ -9,7 +9,7 @@ under this folder; the ESP-IDF project is untouched.
   - `tools/build.sh examples/DialProbe`
   - `tools/upload.sh examples/DialProbe`
   - `tools/monitor.sh`
-  - `tools/.venv/bin/python tools/device_test.py examples/DialProbe --expect 'init: display 240x240' 'init: rtc ok' 'init: touch ok' 'init: rfid ok' 'rtc: 20'`
+  - `tools/.venv/bin/python tools/device_test.py examples/DialProbe --expect 'boot: DialProbe' 'init: rfid ok' 'init: display 240x240' 'init: rtc ok' 'init: touch ok' 'rtc: 20'`
   - `tools/.venv/bin/python -m unittest discover tools/tests`
 
 **Safety:** run `tools/backup_flash.sh` once before the first upload; `upload.sh`
