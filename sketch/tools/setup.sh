@@ -73,22 +73,17 @@ for lib in "$LIB_M5DIAL" "$LIB_M5UNIFIED" "$LIB_M5GFX" "$LIB_NIMBLE" "$LIB_NEOPI
 done
 
 # --- 5b. ctags on Apple Silicon without Rosetta ------------------------------------------
-# why: arduino-cli's bundled ctags is an x86_64 binary; without Rosetta every build fails
-# with "bad CPU type in executable". universal-ctags runs natively, but its raw output is
-# NOT a drop-in: arduino-cli would emit `setup();`-style prototypes inside setup() (see
-# tools/ctags-compat.sh). So install ctags-compat.sh, bound to universal-ctags, in place of
-# the bundled binary (kept as ctags.x86_64). Re-running refreshes the wrapper and also
-# upgrades an older install that symlinked universal-ctags directly.
+# why: arduino-cli's bundled ctags is x86_64 ("bad CPU type" without Rosetta). Builds then
+# use tools/ctags/ctags, a universal-ctags wrapper selected per build by env.sh +
+# build.sh (see env.sh); the toolchain itself is left untouched. Here we only make sure
+# universal-ctags exists, and undo the binary swap earlier versions of this script did
+# (bundled binary moved to ctags.x86_64, ctags replaced by a symlink/wrapper).
 if [ "$os-$arch" = Darwin-arm64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
-  command -v ctags >/dev/null && ctags --version 2>/dev/null | grep -q Universal \
+  [ -x /opt/homebrew/bin/ctags ] && /opt/homebrew/bin/ctags --version 2>/dev/null | grep -q Universal \
     || brew install universal-ctags
-  uctags="$(brew --prefix)/bin/ctags"
   shopt -s nullglob  # why: no ctags dir yet (fresh data dir) must not run the loop on a literal glob
   for d in "$ARDUINO_DIRECTORIES_DATA"/packages/builtin/tools/ctags/*/; do
-    [ -e "$d/ctags.x86_64" ] || mv "$d/ctags" "$d/ctags.x86_64"
-    sed "s#@UCTAGS@#$uctags#" "$TOOLS_DIR/ctags-compat.sh" > "$d/ctags.new"
-    chmod +x "$d/ctags.new"
-    rm -f "$d/ctags"; mv "$d/ctags.new" "$d/ctags"
+    if [ -f "$d/ctags.x86_64" ]; then rm -f "$d/ctags"; mv "$d/ctags.x86_64" "$d/ctags"; fi
   done
   shopt -u nullglob
 fi

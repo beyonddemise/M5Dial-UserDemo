@@ -26,6 +26,21 @@ export ARDUINO_DIRECTORIES_DOWNLOADS="$SKETCH_ROOT/.arduino/staging"
 # (git-ignored there except M5DialDemo/).
 export ARDUINO_DIRECTORIES_USER="$SKETCH_ROOT"
 
+# why: arduino-cli's bundled ctags is x86_64 and fails ("bad CPU type") on Apple Silicon
+# without Rosetta. Raw universal-ctags is no drop-in (it puts `setup(); loop();` inside
+# setup()), so compile calls select tools/ctags/ctags, a format-converting wrapper, via
+# ${M5DIAL_CTAGS_DIR:+--build-property "tools.ctags.path=$M5DIAL_CTAGS_DIR"}. Empty
+# elsewhere (Linux/CI, Rosetta): the bundled ctags is used. The toolchain is never modified.
+M5DIAL_CTAGS_DIR=""
+if [ "$(uname -s)-$(uname -m)" = Darwin-arm64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+  M5DIAL_CTAGS_DIR="$TOOLS_DIR/ctags"
+  # why: prefer Homebrew's universal-ctags over whatever `ctags` comes first on PATH
+  if [ -x /opt/homebrew/bin/ctags ]; then M5DIAL_UCTAGS=/opt/homebrew/bin/ctags
+  else M5DIAL_UCTAGS="$(command -v ctags || true)"; fi
+  export M5DIAL_UCTAGS
+fi
+export M5DIAL_CTAGS_DIR
+
 set -a
 # shellcheck disable=SC1091
 . "$TOOLS_DIR/deps.txt"

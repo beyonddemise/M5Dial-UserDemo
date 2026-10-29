@@ -1,37 +1,25 @@
-"""Regression tests for .ino prototype generation (ctags-compat.sh + the installed ctags).
+"""Regression tests for .ino prototype generation (tools/ctags/ctags + the real build).
 
-Background: on Apple Silicon without Rosetta, setup.sh replaces arduino-cli's x86_64 ctags.
+Background: on Apple Silicon without Rosetta, arduino-cli's bundled x86_64 ctags cannot run.
 Raw universal-ctags made arduino-cli emit ``setup();`` call statements *inside* setup(),
-so the firmware recursed forever at boot. These tests pin the wrapper's output format and
-check the real toolchain end to end.
+so the firmware recursed forever at boot. env.sh/build.sh now select the tools/ctags/ctags
+wrapper per build. These tests pin the wrapper's output format and check build.sh end to end.
 """
 import os
 import re
 import shutil
-import stat
 import subprocess
 import tempfile
 import unittest
 
 TOOLS = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SKETCH_ROOT = os.path.dirname(TOOLS)
-WRAPPER = os.path.join(TOOLS, "ctags-compat.sh")
+WRAPPER = os.path.join(TOOLS, "ctags", "ctags")
 FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "CtagsProto")
 
 # What arduino-cli runs (see `arduino-cli compile -v`), minus the input file.
 CTAGS_ARGS = ["-u", "--language-force=c++", "-f", "-", "--c++-kinds=svpf",
               "--fields=KSTtzns", "--line-directives"]
-
-
-def _render_wrapper(directory, real_ctags):
-    """Install ctags-compat.sh into ``directory`` bound to ``real_ctags`` (as setup.sh does)."""
-    with open(WRAPPER) as f:
-        body = f.read().replace("@UCTAGS@", real_ctags)
-    path = os.path.join(directory, "ctags")
-    with open(path, "w") as f:
-        f.write(body)
-    os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR)
-    return path
 
 
 def _fields(row):
@@ -40,7 +28,7 @@ def _fields(row):
 
 
 class WrapperFormatTest(unittest.TestCase):
-    """ctags-compat.sh rewrites universal-ctags rows into the Arduino ctags format."""
+    """tools/ctags/ctags rewrites universal-ctags rows into the Arduino ctags format."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -54,13 +42,23 @@ class WrapperFormatTest(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def _run(self, wrapper):
-        return subprocess.run([wrapper, *CTAGS_ARGS, self.src],
-                              capture_output=True, text=True, check=True).stdout.splitlines()
+    def _run(self, real_ctags, check=True):
+        """Run the wrapper on ``self.src`` with ``real_ctags`` as the universal-ctags binary."""
+        res = subprocess.run([WRAPPER, *CTAGS_ARGS, self.src], capture_output=True, text=True,
+                             env={**os.environ, "M5DIAL_UCTAGS": real_ctags}, check=check)
+        return res if not check else res.stdout.splitlines()
+
+    def _fake(self, version, rows=()):
+        """A stand-in ctags binary printing ``version`` for --version, else canned ``rows``."""
+        fake = os.path.join(self.dir, "fake-ctags")
+        with open(fake, "w") as f:
+            f.write(f'#!/bin/sh\n[ "$1" = --version ] && {{ echo "{version}"; exit 0; }}\n'
+                    "cat <<'EOF'\n" + "\n".join(rows) + "\nEOF\n")
+        os.chmod(fake, 0o755)
+        return fake
 
     def test_rewrites_canned_universal_rows(self):
         """Needs no universal-ctags: a fake binary prints rows in its raw format."""
-        fake = os.path.join(self.dir, "fake-uctags")
         rows = [
             'setup\t/x/A.ino\t/^void setup() {$/;"\tkind:function\tline:3\t'
             "typeref:typename:void\tsignature:()",
@@ -72,10 +70,8 @@ class WrapperFormatTest(unittest.TestCase):
             "typeref:typename:T\tsignature:(T a)\ttemplate:<class T>",
             'v\t/x/A.ino\t/^P v;$/;"\tkind:variable\tline:8\ttyperef:typename:P',
         ]
-        with open(fake, "w") as f:
-            f.write("#!/bin/sh\ncat <<'EOF'\n" + "\n".join(rows) + "\nEOF\n")
-        os.chmod(fake, 0o755)
-        out = [_fields(r) for r in self._run(_render_wrapper(self.dir, fake))]
+        fake = self._fake("Universal Ctags 6.2.1, Copyright (C) 2015-2025", rows)
+        out = [_fields(r) for r in self._run(fake)]
         self.assertEqual(out[0], {"kind": "function", "line": "2",
                                   "returntype": "void", "signature": "()"})
         self.assertEqual(out[1]["line"], "20")
@@ -91,15 +87,23 @@ class WrapperFormatTest(unittest.TestCase):
         if not uctags or "Universal" not in subprocess.run(
                 [uctags, "--version"], capture_output=True, text=True).stdout:
             self.skipTest("universal-ctags not installed")
-        out = {r.split("\t")[0]: _fields(r) for r in self._run(_render_wrapper(self.dir, uctags))}
+        out = {r.split("\t")[0]: _fields(r) for r in self._run(uctags)}
         self.assertEqual(out["setup"]["line"], "2")
         self.assertEqual(out["setup"]["returntype"], "void")
         self.assertEqual(out["f"]["line"], "20")
         self.assertEqual(out["f"]["returntype"], "int")
 
 
+    def test_rejects_non_universal_ctags(self):
+        """BSD/Exuberant ctags must fail loudly instead of mis-generating prototypes."""
+        res = self._run(self._fake("Exuberant Ctags 5.8"), check=False)
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("not universal-ctags", res.stderr)
+        self.assertEqual(res.stdout, "")
+
+
 class SketchPrototypesTest(unittest.TestCase):
-    """End to end with the *installed* toolchain: the class of bug that broke setup()."""
+    """End to end via build.sh (ctags selection included): the bug that broke setup()."""
 
     def test_prototypes_precede_setup_and_body_is_intact(self):
         if not shutil.which("arduino-cli"):
@@ -114,8 +118,8 @@ class SketchPrototypesTest(unittest.TestCase):
         with open(os.path.join(SKETCH_ROOT, ".build", "CtagsProto", "sketch",
                                "CtagsProto.ino.cpp")) as f:
             code = [l for l in f.read().splitlines() if not l.startswith("#line")]
-        hint = ("broken .ino prototypes - on Apple Silicon without Rosetta rerun "
-                "sketch/tools/setup.sh to install ctags-compat.sh\n" + "\n".join(code))
+        hint = ("broken .ino prototypes - check the ctags selection in tools/env.sh\n"
+                + "\n".join(code))
         start = code.index("void setup() {")
         protos = {re.sub(r"\s+", "", l) for l in code[:start]}
         for p in ("voidsetup();", "voidloop();", "inthelper(intx);", "constchar*label();"):

@@ -1,11 +1,13 @@
 #!/bin/bash
-# ctags-compat.sh - make universal-ctags look like arduino-cli's bundled ctags 5.8-arduino11.
+# tools/ctags/ctags - make universal-ctags look like arduino-cli's bundled ctags 5.8-arduino11.
 #
-# Installed by setup.sh (Apple Silicon without Rosetta only) as
-#   .arduino/data/packages/builtin/tools/ctags/<ver>/ctags
-# with @UCTAGS@ replaced by the absolute path of a universal-ctags binary. arduino-cli
-# runs it as:  ctags -u --language-force=c++ -f - --c++-kinds=svpf --fields=KSTtzns
-#              --line-directives <filtered-sketch.cpp>
+# Selected per build, never installed into the toolchain: on Apple Silicon without Rosetta
+# env.sh sets M5DIAL_CTAGS_DIR to this directory, and build.sh / gen_compile_commands.sh pass
+# `--build-property tools.ctags.path=$M5DIAL_CTAGS_DIR`, so arduino-cli runs this file as
+#   ctags -u --language-force=c++ -f - --c++-kinds=svpf --fields=KSTtzns
+#         --line-directives <filtered-sketch.cpp>
+# The real binary is $M5DIAL_UCTAGS (set by env.sh), else `ctags` on PATH; it must be
+# universal-ctags (macOS /usr/bin/ctags is BSD ctags and is rejected).
 #
 # why: arduino-cli's prototype generator (internal/.../preprocessor/internal/ctags) only
 # understands the Exuberant/Arduino output. Raw universal-ctags differs in two ways that
@@ -22,7 +24,12 @@
 # Exit status is universal-ctags' own.
 set -o pipefail
 
-real="@UCTAGS@"
+real="${M5DIAL_UCTAGS:-$(command -v ctags)}"
+# why: a wrong ctags would fail obscurely or, worse, silently mis-generate prototypes again
+if ! "$real" --version 2>/dev/null | grep -q '^Universal Ctags'; then
+  echo "tools/ctags/ctags: '$real' is not universal-ctags (brew install universal-ctags)" >&2
+  exit 1
+fi
 src="${*: -1}"  # arduino-cli passes the input file last
 
 "$real" "--fields-C++=+{template}" "$@" | awk -v src="$src" '

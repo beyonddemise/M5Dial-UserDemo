@@ -19,11 +19,15 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    wasi-sdk are verified against the sha256 pins in deps.txt.
    Every tool script sources `tools/env.sh`, so no shell activation is needed afterwards.
 3. **Apple Silicon without Rosetta:** arduino-cli's bundled `ctags` is x86_64 (builds fail with
-   `bad CPU type in executable`), so setup.sh replaces it with `tools/ctags-compat.sh`, a
-   wrapper around Homebrew `universal-ctags` that rewrites its output into the format
-   arduino-cli's .ino prototype generator expects (raw universal-ctags silently puts
-   `setup(); loop();` inside `setup()`, which recurses at boot). Re-run setup.sh after pulling
-   changes to that wrapper; `tools/tests/test_ctags_compat.py` fails if the install is stale.
+   `bad CPU type in executable`). setup.sh installs Homebrew `universal-ctags`, and
+   `tools/env.sh` then makes `build.sh` / `gen_compile_commands.sh` pass
+   `--build-property tools.ctags.path=sketch/tools/ctags`, selecting `tools/ctags/ctags`: a
+   wrapper that rewrites universal-ctags output into the format arduino-cli's .ino prototype
+   generator expects (raw universal-ctags silently puts `setup(); loop();` inside `setup()`,
+   which recurses at boot). The installed toolchain is not modified; setup.sh restores the
+   bundled binary if an older version of it had swapped it out. A bare `arduino-cli compile`
+   (without the property) will not work on such a Mac - always build via `tools/build.sh`.
+   `tools/tests/test_ctags_compat.py` checks the generated prototypes end to end.
 4. **Back up the factory flash (once, before any upload):** connect the M5Dial via USB-C, then
    `sketch/tools/backup_flash.sh`. It writes `sketch/backup/m5dial-factory-<date>.bin`
    (exactly 8 388 608 bytes) plus `.sha256`, written as `.partial` and renamed only once verified.
