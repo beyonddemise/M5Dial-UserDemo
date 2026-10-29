@@ -239,3 +239,70 @@ external) and ties the RFID/touch RST inputs high.
 
 The `ft3267` chip's `x`/`y` controls cover the controller's 12-bit range (0-4095). The M5Dial
 panel reports 0-239 (M5GFX.cpp:1977-1980 `x_max = y_max = 239`), so scenarios use that range.
+
+## Launcher and smooth_menu, Task 6
+
+### smooth_menu
+
+`src/smooth_menu/` is upstream `main/apps/utilities/smooth_menu/src` with its MIT `LICENSE` and
+`README.md`. It has no hardware dependency. The only edits are `-Wall -Wextra` fixes: unused
+parameter names commented out, and signed/unsigned comparisons (`size_t` loop index, an
+`int` cast in `Selector_t::goToItem`). Each edited file's header says so. Because it is
+Arduino-free, `tools/test_host.sh` compiles it into the host tests (`test_smooth_menu.cpp`).
+
+### Library linkage: `dot_a_linkage=true`
+
+`library.properties` sets `dot_a_linkage=true`, so the library is linked as an archive and a sketch
+pulls in only the objects it references. Without it, every standalone sketch linked `launcher.cpp`
+and ran its static constructors at boot: 8 icon `M5Canvas` objects and the icon and tag tables
+(16 `std::string` tags). DialProbe
+measured 540,283 B flash / 31,612 B globals with it off, and 537,283 B / 27,964 B with it on.
+
+### Launcher: HAL call mapping
+
+| Original (`_data.hal->...`)                           | Port                                                                 |
+|-------------------------------------------------------|----------------------------------------------------------------------|
+| `canvas` (`LGFX_Sprite*`)                             | `AppContext::canvas` (`M5Canvas*`, from `getUserData()`)            |
+| `_canvas_update()` = `canvas->pushSprite(0, 0)`       | `Launcher::_canvas_update()`, same call                             |
+| `encoder.wasMoved(true)` + `getDirection() < 1` → next | `EncoderDetent::update(dialEncoder.read())`: each step > 0 → `goNext()`, < 0 → `goLast()` |
+| HAL encoder-moved callback `buzz.tone(6000/7000, 20)` | `M5Dial.Speaker.tone(6000, 20)` on next, `(7000, 20)` on previous   |
+| `!encoder.btn.read()` (pressed, level)                | `M5Dial.BtnA.wasPressed()` (edge, see below)                        |
+| HAL button callback `buzz.tone(2000, 20)`             | `M5Dial.Speaker.tone(2000, 20)`                                     |
+| `while (!encoder.btn.read())` hold loop               | `while (M5Dial.BtnA.isPressed()) { M5Dial.update(); ... }`          |
+| `tp.isTouched()` + `tp.update()` + `getTouchPointBuffer()` | `M5Dial.Touch.getDetail()`: `isPressed()`, `x`, `y`            |
+| `HAL::_encoder_button_pressed_callback(nullptr, hal)` | `M5Dial.Speaker.tone(2000, 20)`                                     |
+| `while (tp.isTouched())` release loop                 | `while (M5Dial.Touch.getDetail().isPressed()) { M5Dial.update(); ... }` |
+| `millis()` (esp_timer macro)                          | Arduino `millis()`                                                  |
+| `_log` / `_log_e` / `_log_mem()` (`heap_caps_get_free_size`) | `M5_LOGI` / `M5_LOGE` with the `launcher:` tag, same heap call |
+| `app->setUserData(hal)`                               | `app->setUserData(ctx)` (AppContext*)                               |
+
+### Launcher: behaviour notes
+
+- **Ten ring slots for eight icons:** the upstream menu has 10 selector stops (`n = 10`) and loop
+  mode on, so turning counter-clockwise from slot 0 lands on empty slot 9 (tag `-. -`, log
+  `launcher: select 9 -`), not on slot 7 as the plan's scenario text assumed. The port keeps the
+  original layout. Opening an empty slot does nothing.
+- **Button edge, not level:** the upstream loop opened the selected app whenever the button
+  *was down*. The port opens on `wasPressed()`, so a button still held when the launcher starts
+  (after the factory-test hold, or after an app that quits on press) does not open an app again.
+- **Several detents per frame:** each detent moves the selector once. Upstream moved one item per
+  `wasMoved()`, whatever the count change.
+- **Touch on an icon (new):** a fresh tap (`wasPressed()`) on an icon (`launcher_layout::iconAt`,
+  radius 22 = drawn icon) selects it and logs `launcher: select`. A touch in the centre circle
+  (r 50) still opens the selected app once the selector animation has finished, as upstream.
+- **App manager:** runs `M5Dial.update()` before every `onRunning()`, as `m5dd::runStandalone`
+  does, and accepts `closeApp()` as well as `destroyApp()`. After the app returns, the encoder
+  detent is re-based, so detents the app consumed do not move the launcher.
+- **Not ported yet:** every factory entry logs `app: <name> not ported`, plays the open/close
+  animation and returns (`launcher: ready`). Names: `launcher_layout::appName`.
+- **Icon byte order:** the icon headers are byte-swapped RGB565, as upstream. M5GFX, like the
+  upstream LovyanGFX, reads `pushImage(..., const uint16_t*)` as `swap565_t` while `swapBytes` is
+  false (the default; `LGFXBase::create_pc_fast`). The port calls `pushImage` the same way and
+  never calls `setSwapBytes`, so the colours match the original.
+
+### UserDemo factory-test entry
+
+As upstream `main.cpp`: if `ENABLE_FACTORY_TEST` (config.h, default 1) is set and the button is
+held for more than 1000 ms at boot, polled every 10 ms with `M5Dial.update()`, the sketch plays
+4 kHz/30 ms twice (50 ms apart). Until Task 15 it then logs `factory: not ported` and continues
+with the launcher. Upstream ran the factory test forever instead.

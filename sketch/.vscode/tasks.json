@@ -36,7 +36,7 @@
                   "examples/MemSoak", "examples/LvglDemo"],
       "default": "examples/DialProbe" },
     { "id": "scenario", "type": "pickString", "description": "Wokwi scenario (needs WOKWI_CLI_TOKEN)",
-      "options": ["sim/scenarios/DialProbe/probe.test.yaml"],
+      "options": ["sim/scenarios/DialProbe/probe.test.yaml", "sim/scenarios/UserDemo/launcher.test.yaml"],
       "default": "sim/scenarios/DialProbe/probe.test.yaml" },
     { "id": "expect", "type": "promptString", "description": "Regex expected in the serial log",
       "default": "init: " }
