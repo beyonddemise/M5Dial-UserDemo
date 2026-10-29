@@ -1,0 +1,9 @@
+# The front button (GPIO42, active low) must log its press and release edges.
+name: 'DialProbe: button'
+version: 1
+steps:
+  - wait-serial: 'probe: ready'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - wait-serial: 'btn: pressed'
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'btn: released'

@@ -1,0 +1,12 @@
+# A card with UID DE:AD:BE:EF placed on the WS1850S chip must be read (REQA, CL1
+# anticollision, SELECT) and logged.
+name: 'DialProbe: rfid card'
+version: 1
+steps:
+  - wait-serial: 'probe: ready'
+  - set-control: { part-id: rfid, control: uid0, value: 222 }
+  - set-control: { part-id: rfid, control: uid1, value: 173 }
+  - set-control: { part-id: rfid, control: uid2, value: 190 }
+  - set-control: { part-id: rfid, control: uid3, value: 239 }
+  - set-control: { part-id: rfid, control: card_present, value: 1 }
+  - wait-serial: 'rfid: uid=DE:AD:BE:EF'

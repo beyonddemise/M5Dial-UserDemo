@@ -1,0 +1,10 @@
+# DialProbe init on the virtual M5Dial: every on-board peripheral must answer its probe.
+# Run: tools/sim.sh examples/DialProbe sim/scenarios/DialProbe/init.test.yaml
+name: 'DialProbe: all peripherals initialise'
+version: 1
+steps:
+  - wait-serial: 'init: display 240x240'
+  - wait-serial: 'init: rtc ok'
+  - wait-serial: 'init: touch ok'
+  - wait-serial: 'init: rfid ok'
+  - wait-serial: 'probe: ready'

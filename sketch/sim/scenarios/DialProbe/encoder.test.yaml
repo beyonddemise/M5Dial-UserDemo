@@ -1,0 +1,15 @@
+# One clockwise detent must log steps=1, one counter-clockwise detent steps=-1.
+# The `enc` part is the encoder chip on GPIO41 (A) / GPIO40 (B); `steps` emits that many
+# quadrature cycles (positive = clockwise, A leads B). Setting it back to 0 re-arms it.
+# why: edgeIntervalUs 40 ms - DialProbe polls the encoder (no interrupts until Task 4) and an
+# RFID poll without a card blocks its loop for the 25 ms reader timeout.
+name: 'DialProbe: encoder detents'
+version: 1
+steps:
+  - wait-serial: 'probe: ready'
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'enc: steps=1 '
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: -1 }
+  - wait-serial: 'enc: steps=-1 '
