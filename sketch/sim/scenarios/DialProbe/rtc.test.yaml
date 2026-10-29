@@ -1,7 +1,0 @@
-# The PCF8563 chip starts from the host's UTC time (20xx) and ticks: DialProbe logs it at 1 Hz.
-name: 'DialProbe: rtc ticks'
-version: 1
-steps:
-  - wait-serial: 'probe: ready'
-  - wait-serial: 'rtc: 20'
-  - wait-serial: 'rtc: 20'

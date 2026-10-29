@@ -21,10 +21,11 @@ controls, so automation scenarios can tap the panel with `set-control`.
 
 | Control   | Range   | Meaning |
 |-----------|---------|---------|
-| `x`       | 0-239   | touch X coordinate (raw, as reported in `P1_XH/XL`) |
-| `y`       | 0-239   | touch Y coordinate |
+| `x`       | 0-4095  | touch X coordinate (raw 12-bit value, as reported in `P1_XH/XL`) |
+| `y`       | 0-4095  | touch Y coordinate |
 | `touched` | 0/1     | finger on the panel |
 
+Use the panel's own resolution (e.g. 0-239 on a 240x240 panel such as the M5Stack Dial's).
 Scenario example: set `x` and `y`, then `touched` to 1; set `touched` to 0 to lift.
 
 ## Attributes

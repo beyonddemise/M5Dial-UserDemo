@@ -125,23 +125,27 @@ static uint8_t weekday_at(const chip_t *c, int64_t epoch) {
   return (uint8_t)(((int64_t)c->base_wday + delta % 7 + 7) % 7);
 }
 
-/** Write clock value `t` into registers 02h-08h. */
-static void latch_time_at(chip_t *c, int64_t t) {
+/** Encode clock value `t` as the register values of 02h-08h (out[0] = seconds .. out[6] = years). */
+static void encode_time(const chip_t *c, int64_t t, uint8_t out[7]) {
   int64_t days = floor_div(t, 86400);
   int64_t sod = t - days * 86400;
   int y;
   unsigned m, d;
   civil_from_days(days, &y, &m, &d);
-  c->regs[REG_SECONDS] = (uint8_t)((c->vl ? 0x80 : 0) | to_bcd((unsigned)(sod % 60)));
-  c->regs[REG_MINUTES] = to_bcd((unsigned)(sod / 60 % 60));
-  c->regs[REG_HOURS] = to_bcd((unsigned)(sod / 3600));
-  c->regs[REG_DAYS] = to_bcd(d);
-  c->regs[REG_WEEKDAYS] = weekday_at(c, t);
-  // why: century bit set = 19xx, clear = 20xx (the convention M5Unified/most drivers use);
-  // it toggles when the years register wraps from 99 to 00, as on the part.
-  c->regs[REG_MONTHS] = (uint8_t)((y < 2000 ? 0x80 : 0) | to_bcd(m));
-  c->regs[REG_YEARS] = to_bcd((unsigned)(y % 100));
+  out[0] = (uint8_t)((c->vl ? 0x80 : 0) | to_bcd((unsigned)(sod % 60)));
+  out[1] = to_bcd((unsigned)(sod / 60 % 60));
+  out[2] = to_bcd((unsigned)(sod / 3600));
+  out[3] = to_bcd(d);
+  out[4] = weekday_at(c, t);
+  // why: century bit set = 19xx, clear = 20xx - the convention M5Unified and most drivers use
+  // (the datasheet only says the bit toggles when the years wrap 99 -> 00). The model keeps the
+  // full year, so the bit toggles at 1999 -> 2000; see README "Limitations" for the range.
+  out[5] = (uint8_t)((y < 2000 ? 0x80 : 0) | to_bcd(m));
+  out[6] = to_bcd((unsigned)(y % 100));
 }
+
+/** Write clock value `t` into registers 02h-08h. */
+static void latch_time_at(chip_t *c, int64_t t) { encode_time(c, t, &c->regs[REG_SECONDS]); }
 
 /** Latch the current time into registers 02h-08h (the part freezes them during an access). */
 static void latch_time(chip_t *c) { latch_time_at(c, now_epoch(c)); }
@@ -185,16 +189,20 @@ static void update_int(chip_t *c) {
 }
 
 /** True if every enabled alarm field matches clock value `t` (and at least one is enabled). */
-static bool alarm_matches(chip_t *c, int64_t t) {
-  latch_time_at(c, t);
-  static const uint8_t time_reg[4] = {REG_MINUTES, REG_HOURS, REG_DAYS, REG_WEEKDAYS};
+static bool alarm_matches(const chip_t *c, int64_t t) {
+  // why: local copy - the tick may fire between two bytes of a host transaction, and the
+  // latched registers must not change under the host's burst read or partial write
+  uint8_t now[7];
+  encode_time(c, t, now);
+  static const uint8_t time_idx[4] = {REG_MINUTES - REG_SECONDS, REG_HOURS - REG_SECONDS, REG_DAYS - REG_SECONDS,
+                                      REG_WEEKDAYS - REG_SECONDS};
   static const uint8_t mask[4] = {0x7f, 0x3f, 0x3f, 0x07};
   bool any = false;
   for (int i = 0; i < 4; i++) {
     uint8_t a = c->regs[REG_ALARM_MIN + i];
     if (a & AE) continue;
     any = true;
-    if ((a & mask[i]) != (c->regs[time_reg[i]] & mask[i])) return false;
+    if ((a & mask[i]) != (now[time_idx[i]] & mask[i])) return false;
   }
   return any;
 }

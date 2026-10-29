@@ -53,6 +53,10 @@ None.
 
 - `TI_TP` pulse mode is not modelled: `INT` always follows the flags (level mode).
 - `CLKOUT` output and the `TEST1`/`TESTC` test modes are not modelled.
+- Century bit: the model keeps the full year and shows it as `C = 1` for 1900-1999, `C = 0` for
+  2000-2099 (the convention of M5Unified and most drivers). The datasheet leaves the meaning to
+  software and only toggles `C` at each 99 -> 00 wrap; here it toggles at 1999 -> 2000, and a clock
+  running past 2099 shows years 2100+ as `C = 0`, `00h`.. instead of toggling again.
 - Invalid BCD values or dates are not rejected; they are normalised through the calendar arithmetic.
 - The clock follows simulation time, which may run slower or faster than wall time.
 

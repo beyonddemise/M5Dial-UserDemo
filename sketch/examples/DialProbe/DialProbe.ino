@@ -3,11 +3,11 @@
  * @brief Permanent M5Dial diagnostic sketch: probes every on-board peripheral once and then
  *        logs each input event over USB serial (115200), one line per event.
  *
- * The same lines are checked on the virtual M5Dial (sim/scenarios/DialProbe/*.test.yaml)
+ * The same lines are checked on the virtual M5Dial (sim/scenarios/DialProbe/probe.test.yaml)
  * and on the device (tools/device_test.py), so sim and hardware can be compared directly.
  *
  * Log lines (tag: message):
- *   init: display <w>x<h> | init: rtc ok|fail | init: touch ok|fail | init: rfid ok|fail
+ *   init: board <n> | init: display <w>x<h> | init: rtc ok|fail | init: touch ok|fail | init: rfid ok|fail
  *   probe: ready
  *   enc: steps=<+-n> raw=<n>      (clockwise = positive steps)
  *   btn: pressed|released
@@ -20,8 +20,10 @@
 
 /**
  * Sign that turns a raw clockwise encoder count into a positive step.
- * why: M5Dial 1.0.3's ENCODER(pin1 = GPIO41/A, pin2 = GPIO40/B) counts down when A leads B;
- * value taken from the DialProbe encoder scenario, see docs/PORTING_NOTES.md.
+ * why: M5Dial 1.0.3's ENCODER(pin1 = GPIO41/A, pin2 = GPIO40/B) counts down when A leads B.
+ * Derived from PJRC's quadrature state table (Encoder.h update()); to be confirmed by the
+ * encoder steps of sim/scenarios/DialProbe/probe.test.yaml and Task 19's physical check.
+ * See docs/PORTING_NOTES.md.
  */
 #ifndef M5DD_ENCODER_CW_SIGN
 #define M5DD_ENCODER_CW_SIGN (-1)
@@ -125,6 +127,8 @@ void setup() {
     // default build), so INFO must be enabled explicitly.
     M5.Log.setLogLevel(m5::log_target_serial, ESP_LOG_INFO);
 
+    // why: board 12 = board_M5Dial, i.e. M5GFX autodetected the (virtual) panel
+    M5_LOGI("init: board %d", (int)M5.getBoard());
     M5_LOGI("init: display %dx%d", (int)M5Dial.Display.width(), (int)M5Dial.Display.height());
     M5_LOGI("init: rtc %s", M5Dial.Rtc.isEnabled() ? "ok" : "fail");
     M5_LOGI("init: touch %s", probe_touch() ? "ok" : "fail");

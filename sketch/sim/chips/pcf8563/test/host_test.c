@@ -142,6 +142,23 @@ static void test_alarm_irq(void) {
   assert(mode[P_INT] == INPUT);
 }
 
+static void test_alarm_does_not_touch_latched_registers(void) {
+  boot("2026-10-30 12:34:59");
+  const uint8_t alarm[4] = {0x35, 0x80, 0x80, 0x80};
+  wr(0x09, alarm, 4);
+  wr8(0x01, CTRL2_AIE);
+  // burst read 02h.. latched at 12:34:59; the alarm tick fires between two bytes
+  assert(i2c_cfg.connect(i2c_cfg.user_data, PCF8563_ADDR, false));
+  assert(i2c_cfg.write(i2c_cfg.user_data, 0x02));
+  assert(i2c_cfg.connect(i2c_cfg.user_data, PCF8563_ADDR, true));
+  uint8_t sec = i2c_cfg.read(i2c_cfg.user_data);
+  advance(1.2e9);
+  uint8_t min = i2c_cfg.read(i2c_cfg.user_data);
+  i2c_cfg.disconnect(i2c_cfg.user_data);
+  assert(sec == 0x59 && min == 0x34);
+  assert(rd8(0x01) & CTRL2_AF);
+}
+
 static void test_countdown_timer_irq(void) {
   boot("2026-10-30 12:00:00");
   // M5Unified setTimerIRQ(3000): 0E = 0x82 (TE, 1 Hz), 0F = 3, 01 |= TIE
@@ -183,6 +200,7 @@ int main(void) {
   test_set_date_time_and_century();
   test_partial_write_keeps_time();
   test_alarm_irq();
+  test_alarm_does_not_touch_latched_registers();
   test_countdown_timer_irq();
   test_stop_freezes_clock();
   test_pointer_wraps();
