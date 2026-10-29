@@ -2,6 +2,10 @@
 # Run a sketch on the virtual M5Dial (Wokwi) against an automation scenario.
 #
 # Usage: sim.sh <sketch-dir> <scenario.yaml> [--timeout-ms 30000]
+#        sim.sh <sketch-dir> --prepare-only
+#
+# --prepare-only stops after step 3 (no token needed): sim/wokwi.toml then points at the
+# sketch, ready for the Wokwi VSCode extension (task "Simulate").
 #
 # Steps:
 #   1. builds the sketch via build.sh (sim variant: -DM5DD_SIM, see docs/PORTING_NOTES.md)
@@ -17,10 +21,15 @@ set -euo pipefail
 # shellcheck disable=SC1091
 . "$(dirname "$0")/env.sh"
 
-usage() { echo "usage: sim.sh <sketch-dir> <scenario.yaml> [--timeout-ms 30000]" >&2; exit 64; }
+usage() { echo "usage: sim.sh <sketch-dir> (<scenario.yaml> [--timeout-ms 30000] | --prepare-only)" >&2; exit 64; }
 [ $# -ge 2 ] || usage
 sketch_dir="$(cd "$1" && pwd)"; name="$(basename "$sketch_dir")"
-scenario="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+prepare_only=0; scenario=""
+if [ "$2" = "--prepare-only" ]; then
+  prepare_only=1
+else
+  scenario="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+fi
 shift 2
 timeout_ms=30000
 while [ $# -gt 0 ]; do
@@ -30,7 +39,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ -z "${WOKWI_CLI_TOKEN:-}" ]; then
+if [ "$prepare_only" -eq 0 ] && [ -z "${WOKWI_CLI_TOKEN:-}" ]; then
   echo "sim.sh: WOKWI_CLI_TOKEN is not set (get one at https://wokwi.com/dashboard/ci)" >&2
   exit 2
 fi
@@ -66,6 +75,8 @@ toml="$(cat "$SIM_DIR/wokwi.toml.in")"
 toml="${toml//@FIRMWARE@/$firmware/$name.ino.merged.bin}"
 toml="${toml//@ELF@/$firmware/$name.ino.elf}"
 printf '%s\n%s' "$toml" "$chips_toml" > "$SIM_DIR/wokwi.toml"
+
+[ "$prepare_only" -eq 1 ] && { echo "sim.sh: $SIM_DIR/wokwi.toml prepared for $name"; exit 0; }
 
 # 4. simulate
 scenario_name="$(basename "$scenario" .yaml)"; scenario_name="${scenario_name%.test}"

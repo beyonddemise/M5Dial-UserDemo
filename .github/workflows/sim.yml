@@ -62,11 +62,13 @@ jobs:
         env:
           WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
         working-directory: sketch
-        # why: one tools/sim_ci.sh call for all scenarios (verdict logic unit-tested in
-        # tools/tests/test_sim_ci.py): a Wokwi transport drop (code 1006) is retried once; a
-        # used-up Wokwi CI minute quota marks this and the remaining scenarios SKIPPED (warning +
-        # step summary) without failing the job; all scenarios run even if one fails, and the
-        # step fails if any scenario failed.
+        # why: every scenario finishes within a few simulated seconds; 20 s of simulated time
+        # bounds the wall time a hanging scenario can burn from the Wokwi CI minute quota.
+        # One tools/sim_ci.sh call for all scenarios (verdict logic unit-tested in
+        # tools/tests/test_sim_ci.py): retries only for Wokwi transport drops (error 1006), never
+        # for a real failure. A used-up quota marks this and the remaining scenarios SKIPPED
+        # (warning + step summary) without failing the job - a billing condition, not a test
+        # result. All other scenarios run even if one fails; the step fails if any scenario failed.
         run: |
           pairs=()
           for scenario in sim/scenarios/*/*.test.yaml; do
@@ -74,7 +76,7 @@ jobs:
             sketch="examples/$name"; [ -d "$sketch" ] || sketch="$name"
             pairs+=("$sketch" "$scenario")
           done
-          tools/sim_ci.sh --timeout-ms 60000 "${pairs[@]}"
+          tools/sim_ci.sh --timeout-ms 20000 "${pairs[@]}"
 
       - name: Upload sim output
         if: always()

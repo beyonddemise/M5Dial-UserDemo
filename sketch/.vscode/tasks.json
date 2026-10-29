@@ -13,18 +13,32 @@
     { "label": "Device test", "type": "shell",
       "command": "\"${workspaceFolder}/tools/.venv/bin/python\" \"${workspaceFolder}/tools/device_test.py\" '${input:sketch}' --expect '${input:expect}'",
       "problemMatcher": [] },
+    { "label": "Sim prepare", "type": "shell",
+      "command": "${workspaceFolder}/tools/sim.sh ${input:sketch} --prepare-only", "problemMatcher": ["$gcc"] },
+    // why: the Wokwi extension simulates sim/wokwi.toml (pick it once with "Wokwi: Select Config File");
+    // "Sim prepare" points it at the chosen sketch and builds the chips first.
+    { "label": "Simulate", "dependsOn": ["Sim prepare"],
+      "command": "${command:wokwi-vscode.start}", "problemMatcher": [] },
+    { "label": "Sim test", "type": "shell",
+      "command": "${workspaceFolder}/tools/sim.sh ${input:sketch} ${workspaceFolder}/${input:scenario}",
+      "problemMatcher": [] },
     { "label": "Host tests", "type": "shell",
       "command": "\"${workspaceFolder}/tools/.venv/bin/python\" -m unittest discover \"${workspaceFolder}/tools/tests\"",
       "problemMatcher": [] }
   ],
   "inputs": [
     { "id": "sketch", "type": "pickString", "description": "Sketch to use",
-      "options": ["UserDemo", "examples/Smoke", "examples/DialProbe", "examples/LcdTest",
+      "options": ["UserDemo", "examples/DialProbe", "examples/LcdTest",
                   "examples/RtcTest", "examples/RfidTest", "examples/Brightness",
                   "examples/TempDemo", "examples/WifiScan", "examples/BleServer",
                   "examples/MemSoak", "examples/LvglDemo"],
-      "default": "examples/Smoke" },
+      "default": "examples/DialProbe" },
+    { "id": "scenario", "type": "pickString", "description": "Wokwi scenario (needs WOKWI_CLI_TOKEN)",
+      "options": ["sim/scenarios/DialProbe/init.test.yaml", "sim/scenarios/DialProbe/encoder.test.yaml",
+                  "sim/scenarios/DialProbe/button.test.yaml", "sim/scenarios/DialProbe/touch.test.yaml",
+                  "sim/scenarios/DialProbe/rtc.test.yaml", "sim/scenarios/DialProbe/rfid.test.yaml"],
+      "default": "sim/scenarios/DialProbe/init.test.yaml" },
     { "id": "expect", "type": "promptString", "description": "Regex expected in the serial log",
-      "default": "boot: " }
+      "default": "init: " }
   ]
 }

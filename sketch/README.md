@@ -6,10 +6,10 @@ under this folder; the ESP-IDF project is untouched.
 - Toolchain and first-time setup: [docs/SETUP.md](docs/SETUP.md)
 - Pinned versions: [tools/deps.txt](tools/deps.txt)
 - Everyday commands (after `tools/setup.sh`):
-  - `tools/build.sh examples/Smoke`
-  - `tools/upload.sh examples/Smoke`
+  - `tools/build.sh examples/DialProbe`
+  - `tools/upload.sh examples/DialProbe`
   - `tools/monitor.sh`
-  - `tools/.venv/bin/python tools/device_test.py examples/Smoke --expect 'boot: smoke'`
+  - `tools/.venv/bin/python tools/device_test.py examples/DialProbe --expect 'init: display 240x240' 'init: rtc ok' 'init: touch ok' 'init: rfid ok' 'rtc: 20'`
   - `tools/.venv/bin/python -m unittest discover tools/tests`
 
 **Safety:** run `tools/backup_flash.sh` once before the first upload; `upload.sh`

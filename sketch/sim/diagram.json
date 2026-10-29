@@ -65,6 +65,34 @@
       "top": 220,
       "left": -200,
       "attrs": {}
+    },
+    {
+      "type": "chip-ft3267",
+      "id": "touch",
+      "top": -40,
+      "left": 420,
+      "attrs": {}
+    },
+    {
+      "type": "chip-pcf8563",
+      "id": "rtc",
+      "top": 60,
+      "left": 420,
+      "attrs": {}
+    },
+    {
+      "type": "chip-ws1850s",
+      "id": "rfid",
+      "top": 160,
+      "left": 420,
+      "attrs": {}
+    },
+    {
+      "type": "chip-encoder",
+      "id": "enc",
+      "top": 260,
+      "left": 420,
+      "attrs": {}
     }
   ],
   "connections": [
@@ -197,6 +225,120 @@
     [
       "pot:GND",
       "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "touch:SDA",
+      "esp:11",
+      "blue",
+      []
+    ],
+    [
+      "touch:SCL",
+      "esp:12",
+      "yellow",
+      []
+    ],
+    [
+      "rtc:SDA",
+      "esp:11",
+      "blue",
+      []
+    ],
+    [
+      "rtc:SCL",
+      "esp:12",
+      "yellow",
+      []
+    ],
+    [
+      "rfid:SDA",
+      "esp:11",
+      "blue",
+      []
+    ],
+    [
+      "rfid:SCL",
+      "esp:12",
+      "yellow",
+      []
+    ],
+    [
+      "touch:VCC",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "touch:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "touch:INT",
+      "esp:14",
+      "green",
+      []
+    ],
+    [
+      "touch:RST",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "rtc:VDD",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "rtc:VSS",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "rfid:VCC",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "rfid:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "rfid:RST",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "enc:A",
+      "esp:41",
+      "green",
+      []
+    ],
+    [
+      "enc:B",
+      "esp:40",
+      "purple",
+      []
+    ],
+    [
+      "enc:VCC",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "enc:GND",
+      "esp:GND.1",
       "black",
       []
     ]
