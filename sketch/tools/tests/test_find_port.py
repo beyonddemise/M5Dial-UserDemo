@@ -44,6 +44,21 @@ class FindPortTest(unittest.TestCase):
             self.assertEqual(find_port.main([]), 0)
         self.assertEqual(out.getvalue().strip(), "/dev/ttyACM0")
 
+    def test_find_ports_returns_all_matches(self):
+        ports = [_port("/dev/ttyACM0", 0x303A, 0x1001), _port("/dev/ttyACM1", 0x303A, 0x1001)]
+        with mock.patch("serial.tools.list_ports.comports", return_value=ports):
+            self.assertEqual(find_port.find_ports("303A:1001"), ["/dev/ttyACM0", "/dev/ttyACM1"])
+
+    def test_multiple_matches_exit_3_and_print_nothing(self):
+        out, err = io.StringIO(), io.StringIO()
+        ports = [_port("/dev/ttyACM0", 0x303A, 0x1001), _port("/dev/ttyACM1", 0x303A, 0x1001)]
+        with mock.patch("serial.tools.list_ports.comports", return_value=ports), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            self.assertEqual(find_port.main([]), 3)
+        self.assertEqual(out.getvalue(), "")
+        self.assertIn("ambiguous", err.getvalue())
+        self.assertIn("/dev/ttyACM1", err.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
