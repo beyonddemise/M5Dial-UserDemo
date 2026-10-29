@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include "dial_encoder.h"
+#include "ui_tones.h"
 
 #ifdef M5DD_SIM
 #include <esp_rom_gpio.h>
@@ -14,16 +15,14 @@
 
 namespace {
 
+using namespace ui_tones;
+
 constexpr int CANVAS_SIZE = 240;  ///< the round panel is 240x240
 constexpr int CANVAS_BPP = 16;    ///< RGB565: 115 KB, fits without PSRAM
 constexpr uint8_t RFID_REG_VERSION = 0x37;   ///< MFRC522 VersionReg
 constexpr uint32_t RFID_I2C_FREQ = 100000;   ///< as M5Dial's MFRC522 register access
 
 constexpr int ICON_SIZE = 42;               ///< launcher icon bitmaps are 42x42 RGB565
-constexpr uint32_t TONE_MS = 20;            ///< original HAL click length
-constexpr float TONE_PRESS_HZ = 2000;       ///< original HAL button-pressed callback
-constexpr float TONE_NEXT_HZ = 6000;        ///< original HAL encoder callback, count up
-constexpr float TONE_LAST_HZ = 7000;        ///< original HAL encoder callback, count down
 constexpr uint32_t RELEASE_POLL_MS = 5;     ///< original `while (!btn.read()) delay(5)`
 
 bool rfid_present = false;
@@ -121,10 +120,11 @@ void initGui(MOONCAKE::APP_BASE& app, AppContext& ctx, M5Canvas& icon, uint32_t 
     gui->init(ctx.canvas, &icon);
 }
 
-int32_t readDetents(EncoderDetent& detent) {
+int32_t readDetentsWithClick(EncoderDetent& detent) {
     int32_t steps = detent.update(dialEncoder.read());
-    // why here: the original HAL played this from its encoder-moved callback, so it sounded in
-    // every app; without a HAL each app's input read plays it.
+    // why here: the original HAL played this from its encoder-moved callback, which fired from
+    // wasMoved() - i.e. only in apps that polled the encoder (not RTC_Test). Apps that read the
+    // knob call this; an app that ignores the knob stays silent, as upstream.
     if (steps > 0) M5Dial.Speaker.tone(TONE_NEXT_HZ, TONE_MS);
     if (steps < 0) M5Dial.Speaker.tone(TONE_LAST_HZ, TONE_MS);
     return steps;
