@@ -17,7 +17,7 @@ The primary goal is *working samples*; whether the owner later builds their own 
 - A new `/sketch` tree containing all converted sources, assets and tools.
 - Every original app works on a real M5Dial from Arduino builds:
   launcher, LCD test, RTC test, RFID test, brightness, Wi-Fi scan, BLE server,
-  temp demo ("Video Shit"), More menu (Power Off / Quit), factory-test mode.
+  temp demo (`TempDemo`; legacy class `VideoShit`, renamed — see §5.3), More menu (Power Off / Quit), factory-test mode.
 - Hardware access exclusively via the M5Dial library (M5Unified / M5GFX underneath).
 - Comprehensive VSCode setup instructions (macOS primary, Linux/Windows notes).
 - Work decomposes cleanly into GitHub issues.
@@ -44,10 +44,12 @@ The primary goal is *working samples*; whether the owner later builds their own 
 | D4 | Factory test: **ported**, behind `ENABLE_FACTORY_TEST`; **IO jig step included** (LED strip + ADC + Port A I2C scan) and **skippable** so a bare device can complete the run. The owner will build the jig. |
 | D5 | Factory test results: **operator PASS/FAIL/SKIP per step + summary screen and serial log** before power-off; not persisted. |
 | D6 | Tracking: **Claude creates epic + issues on `beyonddemise/M5Dial-UserDemo`** (after confirmation); **one PR per issue** against `main`. |
-| D7 | **No compatibility layer.** Ported code calls the M5Dial library directly and uses its naming and idioms (`M5Dial.BtnA.wasPressed()`, `M5Dial.Encoder.read()`, `M5Dial.Touch.getDetail()`, `M5Dial.Rtc`, `M5Canvas`, `M5_LOGI`). Readers should not need to know the original firmware. Port behaviour, not names. |
+| D7 | **No compatibility layer.** Ported code calls the M5Dial library directly and uses its naming and idioms (`M5Dial.BtnA.wasPressed()`, `M5Dial.Touch.getDetail()`, `M5Dial.Rtc`, `M5Canvas`, `M5_LOGI`). Readers should not need to know the original firmware. Port behaviour, not names. Single exception: encoder input via `DialEncoder` (D12). |
 | D8 | **Simulated hardware tests from phase 1:** a **virtual M5Dial in Wokwi** (custom chips for the parts Wokwi lacks), so unmodified sketches run under `wokwi-cli` scenario tests locally and in CI. QEMU rejected (no GPIO/I2C/SPI emulation on ESP32-S3). |
 | D9 | **All human-only checks in one acceptance task near the end**; every earlier task is verified automatically (host tests, Wokwi scenarios, flash + serial on the attached device). |
 | D10 | Execution: **subagent-driven** (fresh implementer + reviewer per task). |
+| D12 | **Encoder via own interrupt decoder `DialEncoder`** (M5DialDemo), same API as `M5Dial.Encoder` (`begin/read/readAndReset/write`). Why: M5Dial 1.0.3 `Encoder.h` defines interrupt pins only up to 39, so on GPIO40/41 no interrupt attaches and counts update only inside `read()` — fast turns lose/flip steps ([m5stack/M5Dial#8](https://github.com/m5stack/M5Dial/issues/8)). The one deliberate exception to D7; remove once upstream is fixed. |
+| D13 | PRs: **merge commit, branch deleted after merge**; CodeRabbit review addressed before merge. |
 | D11 | **Wokwi custom chips are kept and packaged for donation back to Wokwi** (self-contained, MIT, template layout, final contribution-package issue). |
 
 ## 4. Constraints
@@ -62,8 +64,10 @@ The primary goal is *working samples*; whether the owner later builds their own 
   Depends on M5Unified + M5GFX.
 - **Arduino sketch rules:** sketch folder name == `.ino` name; only the sketch root and
   `src/` (recursively) are compiled; shared code across sketches must be a library.
-- **RAM:** 240×240×16 bpp canvas = 115 KB of internal RAM; Wi-Fi + BLE + canvas must coexist
-  (the original already does this, so it fits — but nothing large may be added to the launcher).
+- **RAM:** 240×240×16 bpp canvas = 115 KB of internal RAM; Wi-Fi and BLE are used **sequentially**, as in the
+  original (each app starts its stack on open and releases it on close; the factory test keeps both disabled).
+  Requirement: repeated open/close of Wi-Fi and BLE apps alongside the canvas must not leak or crash
+  (`MemSoak`, Task 14). Simultaneous Wi-Fi + BLE is not a goal.
 - **Arduino-ESP32 core 3.x** (IDF 5.x underneath), so raw ESP-IDF APIs (FreeRTOS, esp_log, esp_wifi)
   remain callable where an Arduino equivalent would be a rewrite rather than a port.
 
@@ -89,7 +93,8 @@ sketch/
       src/
         M5DialDemo.h            # umbrella include
         app_context.h           # what apps receive via setUserData(): the shared M5Canvas
-        encoder_detent.h        # raw M5Dial.Encoder counts → detent steps (only helper; no wrappers)
+        dial_encoder.h/.cpp     # interrupt-driven quadrature counter on GPIO40/41, M5Dial.Encoder API (D12)
+        encoder_detent.h        # raw counts → detent steps (pure math)
         mooncake/               # APP_BASE, GUI_Base (app framework, not hardware)
         smooth_menu/            # ported as-is (MIT, keep LICENSE)
         apps/<app>/             # each app's logic + gui, reused by launcher and standalone sketches
@@ -127,7 +132,7 @@ is the port of `main/main.cpp` (hold-button-at-boot → factory test, else launc
 | Original | Replacement (M5Dial naming) |
 |---|---|
 | `LGFX_StampRing` + vendored LovyanGFX | `M5Dial.Display` (M5GFX autodetects the Dial); `LGFX_Sprite` → `M5Canvas` |
-| ESP32Encoder `wasMoved()/getDirection()` | `M5Dial.Encoder.read()` (x4 counts) → `encoder_detent.h` turns counts into detent steps; positive step = M5Dial's natural sign, defined as **clockwise = next item** |
+| ESP32Encoder `wasMoved()/getDirection()` | `DialEncoder.read()` (x4 counts, interrupt-driven, D12) → `encoder_detent.h` turns counts into detent steps; positive step = M5Dial's natural sign, defined as **clockwise = next item** |
 | `Button` on GPIO42, `!btn.read()` loops | `M5Dial.BtnA.isPressed()/wasPressed()/wasReleased()/pressedFor(ms)`; every loop (incl. blocking waits) calls `M5Dial.update()` |
 | FT3267 driver (`hal_tp.hpp`) | `M5Dial.Touch.getDetail()` (`m5::touch_detail_t`: `x`, `y`, `isPressed()`, `wasClicked()`) |
 | PCF8563 driver (`hal_rtc.hpp`) | `M5Dial.Rtc` (`getDateTime()`, `setAlarmIRQ(sec)`, `clearIRQ()`, `disableIRQ()`) |
@@ -274,8 +279,8 @@ Phase 3 — wrap-up
 - Original ESP-IDF tree left untouched.
 - Exact pinned versions of board package and libraries chosen at implementation time (latest stable, recorded in SETUP.md).
 - Factory test Wi-Fi/BLE steps stay disabled as in the original.
-- `encoder_detent.h` is the only shared helper over the M5Dial API (pure count→step math; the
-  M5Dial `ENCODER` exposes raw x4 counts only). Logging via M5Unified's `M5_LOGx`.
+- Shared input helpers: `DialEncoder` (D12) is the only one that touches hardware input;
+  `encoder_detent.h` is pure count→step math. Logging via M5Unified's `M5_LOGx`.
 - BLE verified from the Mac with `bleak` instead of a phone.
 
 ## 9. Left to the builder
