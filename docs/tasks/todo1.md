@@ -1,38 +1,41 @@
 # M5Dial UserDemo → Arduino Sketch Port — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (owner's choice) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Every app of the ESP-IDF M5Dial UserDemo runs again as Arduino `.ino` sketches under `/sketch`, built with arduino-cli from VSCode, on the official M5Dial library.
+**Goal:** Every app of the ESP-IDF M5Dial UserDemo runs again as Arduino `.ino` sketches under `/sketch`, built with arduino-cli from VSCode, written directly against the official M5Dial library, and tested automatically on a virtual M5Dial in Wokwi and on the attached device.
 
-**Architecture:** `/sketch` is an Arduino sketchbook. A local library `M5DialDemo` holds a thin HAL facade over `M5Dial` that preserves the original `hal->encoder/tp/rtc/display/canvas/buzz` call shape, plus the ported Mooncake app base, `smooth_menu` and all apps. `UserDemo.ino` is the launcher; `examples/<App>/<App>.ino` run one app each. Verification is host-side unit tests for pure logic plus hardware-in-the-loop (flash + serial log assertions) on the attached M5Dial.
+**Architecture:** `/sketch` is an Arduino sketchbook. Local library `M5DialDemo` holds the kept app framework (Mooncake `APP_BASE`, `GUI_Base`, `smooth_menu`) and all apps; apps call `M5Dial.*` directly (no hardware wrappers). `UserDemo.ino` is the launcher; `examples/<App>/<App>.ino` run one app each. `sketch/sim/` is a Wokwi project (stock parts + custom chips) that M5Unified/M5GFX accept as an M5Dial, so the same ELF runs in sim and on hardware.
 
-**Tech Stack:** arduino-cli, M5Stack ESP32 board package (Arduino-ESP32 3.x), M5Dial 1.0.3 + M5Unified + M5GFX, NimBLE-Arduino, Adafruit NeoPixel, lvgl 9.x (LvglDemo only), Python 3 (Pillow, pyserial) for tools, GitHub Actions.
+**Tech Stack:** arduino-cli, M5Stack ESP32 board package (Arduino-ESP32 3.x), M5Dial 1.0.3 + M5Unified + M5GFX, NimBLE-Arduino, Adafruit NeoPixel, lvgl 9.x (LvglDemo only), Wokwi (wokwi-cli, Chips API, wasi-sdk), Python 3 (pyserial, Pillow, esptool, bleak), GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-10-30-arduino-sketch-port-design.md` (read it first; this plan argues from it).
+**Spec:** `docs/superpowers/specs/2026-10-30-arduino-sketch-port-design.md` (read first; decisions D1–D10 are binding).
 
 **Original source (read-only reference):** `main/` — never modified.
 
+**Owner prerequisites before Task 2:** Wokwi account, `WOKWI_CLI_TOKEN` exported in the shell and set as GitHub repo secret. Before Task 13: macOS Bluetooth permission for the terminal app.
+
 ## Global Constraints
 
-- All new files live under `/sketch` (plus `.github/workflows/` for CI); `main/`, `components/`, root build files untouched.
-- Hardware access only via `M5Dial` (`Display`, `Touch`, `Rtc`, `Speaker`, `Power`, `BtnA`, `Encoder`, `Rfid`, `Ex_I2C`). No vendored LovyanGFX/ESP32Encoder/FT3267/PCF8563/rc522 code. Do **not** install the LovyanGFX library (clashes with M5GFX).
-- Library versions pinned in one place: `sketch/arduino-cli.yaml` comment block + `sketch/tools/deps.txt`; SETUP.md quotes the same values. Pick latest stable at Task 1, record them, never float.
+- All new files under `/sketch` (plus `.github/workflows/`); `main/`, `components/`, root build files untouched.
+- **No compatibility layer (D7).** Ported code uses M5Dial naming: `M5Dial.Display`, `M5Dial.Encoder.read()`, `M5Dial.BtnA.isPressed()/wasPressed()/wasReleased()/pressedFor()`, `M5Dial.Touch.getDetail()`, `M5Dial.Rtc.getDateTime()/setAlarmIRQ()/clearIRQ()/disableIRQ()`, `M5Dial.Speaker.tone()`, `M5Dial.Power.powerOff()/timerSleep()`, `M5Dial.Rfid`, `M5Dial.Ex_I2C`, `M5Canvas`. No `HAL` class, no `hal->`, no `LGFX_Sprite`, no `btn.read()`, no `tp.` names in new code. The only shared hardware-adjacent helper is `EncoderDetent` (pure math).
+- Every loop that waits on input calls `M5Dial.update()` each iteration.
+- Logging only via M5Unified `M5_LOGI/W/E`; tests match on the message body, form `<tag>: <message>` (e.g. `rfid: uid=AA:BB:CC:DD`). Serial 115200.
+- Library versions pinned once in `sketch/tools/deps.txt`; SETUP.md quotes the same values. Choose latest stable in Task 1; never float. Do **not** install LovyanGFX.
 - Wi-Fi credentials only in git-ignored `sketch/UserDemo/secrets.h`; `secrets.example.h` committed.
-- Serial: 115200 baud. All diagnostic output goes through `M5DD_LOG(tag, fmt, ...)` → line format `[M5DD] <tag>: <message>` (HIL tests grep this).
-- `ENABLE_FACTORY_TEST` defaults to on in `config.h`.
-- Fonts: `GUI_FONT_CN_BIG = &fonts::efontCN_24`, `GUI_FONT_CN_SMALL = &fonts::efontCN_16_b`.
-- Code docs: class + method level doc comments (Doxygen `/** */`), `// why:` comments on non-obvious logic (owner's CLAUDE.md).
-- Keep upstream author headers/licences on ported files (Forairaaaaa, smooth_menu MIT, NimBLE Apache-2.0 example origin).
-- One GitHub issue ↔ one task ↔ one branch `port/<NN>-<slug>` ↔ one PR against `main`. Issue closes after the owner ticks the on-device checklist.
-- First flash only after the full flash backup in Task 1 exists.
+- `ENABLE_FACTORY_TEST` defaults on in `config.h`. Fonts: `GUI_FONT_CN_BIG = &fonts::efontCN_24`, `GUI_FONT_CN_SMALL = &fonts::efontCN_16_b`.
+- Doc comments on every class and public method (`/** */`); `// why:` on non-obvious logic. Keep upstream author headers/licences on ported files.
+- One task ↔ one issue ↔ branch `port/<NN>-<slug>` ↔ one PR against `main`. A task is done when its automated checks pass; **no task before Task 19 waits for a human**.
+- No upload to the device before Task 1's flash backup exists.
+- Same compiled ELF for sim and device; sim-only behaviour only via the documented fallback flag (Task 2).
+- **Wokwi parts are donation-ready (owner wants to contribute them back to Wokwi):** each chip in `sim/chips/<chip>/` is self-contained (no includes from outside its folder, no M5DialDemo dependency), follows the official Wokwi chip template layout (`<chip>.chip.json`, `<chip>.chip.c`, `Makefile`, `README.md` with pins/controls/supported commands/limitations, `LICENSE` = MIT), is generic to the real part (no M5Dial-specific behaviour hard-coded beyond defaults), and builds a `chip.zip` the way the template's release workflow does. `diagram.json` is kept as the reference "M5Dial" assembly.
 
 ## Review Focus
 
-1. **Button polarity:** original `encoder.btn.read()` returns the debounced *pin level* — `true` = released, `false` = pressed (42 call sites test `!btn.read()`). Facade must keep this; `M5Dial.BtnA.isPressed()` is the inverse. → host test in Task 2.
-2. **Encoder step size and zero crossing:** original = half-quad (2 counts/cycle) ÷ 2; M5Dial `ENCODER` = x4. One physical detent must produce exactly one `wasMoved()`; detents around count 0 must behave like any other (truncating division makes a double-wide dead zone). → host test + HIL in Task 2.
-3. **Encoder direction sign:** original sets `_direction = 1` when the count *decreases*. Same physical rotation must move menus the same way as the original firmware. → HIL check in Task 2 against the backup firmware observation recorded in Task 1.
-4. **Serial port changes / device in download mode:** port name differs per plug-in; a crashed sketch can drop USB-CDC. Scripts must auto-detect by VID:PID `303A:1001` and fail with a clear message. → test in Task 1.
-5. **Heap exhaustion with Wi-Fi + BLE + 115 KB canvas (no PSRAM):** opening Wi-Fi scan then BLE then returning to launcher must not crash. → HIL soak in Task 12.
+1. **Missing `M5Dial.update()` in blocking waits:** the original has many `while (!btn.read())` loops; ported naïvely to `while (M5Dial.BtnA.isPressed())` without `update()` they hang forever. → Task 6 scenario `press_hold_release_opens_app`.
+2. **Encoder detent size and zero crossing:** M5Dial `ENCODER` is x4; one detent must give exactly one step, including detents around count 0 (truncating division makes a double-wide dead zone). → Task 4 host tests + Task 3 probe scenario.
+3. **Direction:** clockwise must mean "next item" everywhere. → Task 3 probe scenario (KY-040 CW → `steps=+1`), Task 6 launcher scenario, Task 19 physical check.
+4. **Serial port changes / download mode:** port name differs per plug-in; crashed sketch can drop USB-CDC. Tools auto-detect VID:PID `303A:1001` and fail with a clear message. → Task 1 test.
+5. **Heap exhaustion (no PSRAM):** 115 KB canvas + Wi-Fi + BLE across repeated app open/close. → Task 14 `MemSoak` device test.
 
 ---
 
@@ -42,189 +45,248 @@
 sketch/
   README.md  arduino-cli.yaml  .gitignore
   docs/SETUP.md  PORTING_NOTES.md  TEST_CHECKLIST.md  FACTORY_TEST_JIG.md
-  tools/deps.txt  setup.sh  build.sh  upload.sh  monitor.sh  find_port.py  hil.py
-        backup_flash.sh  restore_flash.sh  gen_compile_commands.sh  png2rgb565.py
-        test_host.sh  tests/test_png2rgb565.py  tests/test_find_port.py
-  .vscode/tasks.json  settings.json  extensions.json  c_cpp_properties.json
+  tools/deps.txt setup.sh build.sh upload.sh monitor.sh find_port.py device_test.py
+        sim.sh backup_flash.sh restore_flash.sh gen_compile_commands.sh png2rgb565.py
+        ble_check.py test_host.sh  tests/test_find_port.py  tests/test_png2rgb565.py
+  sim/  wokwi.toml.in  diagram.json  chips/{gc9a01,ft3267,pcf8563,ws1850s}/  scenarios/<Sketch>/*.test.yaml  golden/
+  .vscode/tasks.json settings.json extensions.json c_cpp_properties.json
   backup/ (git-ignored)
   libraries/M5DialDemo/
     library.properties
-    src/M5DialDemo.h  config.h  log.h
-    src/hal/hal.h  hal.cpp  encoder_facade.h/.cpp  button_facade.h/.cpp
-            touch_facade.h  rtc_facade.h  buzzer_facade.h  detent_quantizer.h
-    src/mooncake/app.h  gui_base.h  gui_base.cpp
-    src/smooth_menu/...           (ported from main/apps/utilities/smooth_menu/src + LICENSE)
+    src/M5DialDemo.h  config.h  app_context.h  encoder_detent.h  m5dd_begin.{h,cpp}
+    src/mooncake/app.h  gui_base.{h,cpp}
+    src/smooth_menu/**                       (from main/apps/utilities/smooth_menu/src + LICENSE)
     src/assets/launcher_icons/*.h  temp_demo_icons/*.h  png/*.png
-    src/apps/launcher/  lcd_test/  rtc_test/  rfid_test/  set_brightness/  temp_demo/
-             wifi_scan/  ble_server/  more_menu/  factory_test/   (each: app_*.h/.cpp + gui/)
-    test/host/  (host unit tests, not compiled by Arduino)
+    src/apps/{launcher,lcd_test,rtc_test,rfid_test,set_brightness,temp_demo,wifi_scan,ble_server,more_menu,factory_test}/
+    test/host/*.cpp                          (host unit tests, not built by Arduino)
   UserDemo/UserDemo.ino  secrets.example.h
-  examples/LcdTest RtcTest RfidTest Brightness TempDemo WifiScan BleServer LvglDemo/
+  examples/DialProbe LcdTest RtcTest RfidTest Brightness TempDemo WifiScan BleServer MemSoak LvglDemo/
 ```
 
 ---
 
-### Task 1: Toolchain, skeleton, flash backup  *(issue 1)*
+## Phase 1 — Foundation and simulation
 
-**Files:**
-- Create: `sketch/arduino-cli.yaml`, `sketch/.gitignore`, `sketch/README.md`, `sketch/tools/{deps.txt,setup.sh,build.sh,upload.sh,monitor.sh,find_port.py,hil.py,backup_flash.sh,restore_flash.sh,gen_compile_commands.sh}`, `sketch/tools/tests/test_find_port.py`, `sketch/.vscode/*`, `sketch/docs/SETUP.md` (draft), `sketch/examples/Blink/Blink.ino` (temporary smoke sketch, deleted in Task 4)
+### Task 1: Toolchain, skeleton, device tooling, flash backup  *(issue 1)*
+
+**Files:** `sketch/{arduino-cli.yaml,.gitignore,README.md}`, `sketch/tools/{deps.txt,setup.sh,build.sh,upload.sh,monitor.sh,find_port.py,device_test.py,backup_flash.sh,restore_flash.sh,gen_compile_commands.sh}`, `sketch/tools/tests/test_find_port.py`, `sketch/.vscode/*`, `sketch/docs/SETUP.md` (draft), `sketch/examples/Smoke/Smoke.ino` (deleted in Task 3).
 
 **Interfaces — Produces:**
-- `tools/find_port.py [--vidpid 303A:1001]` → prints port path, exit 0; exit 2 + message `no M5Dial found (VID:PID 303A:1001). Plug in, or hold the knob button while plugging in for download mode.`
-- `tools/build.sh <sketch-dir>` → `arduino-cli compile --config-file sketch/arduino-cli.yaml --fqbn "$M5DIAL_FQBN" --warnings default --build-path sketch/.build/<name> <dir>`; FQBN from `deps.txt` (`m5stack:esp32:m5stack_dial` — confirm with `arduino-cli board listall dial`).
-- `tools/upload.sh <sketch-dir> [port]`, `tools/monitor.sh [port]` (115200).
-- `tools/hil.py <sketch-dir> --expect <regex>... [--timeout 20] [--no-upload]` → uploads, opens serial, resets via RTS, passes when every regex matched in order, prints captured log; exit 1 on timeout listing unmatched regexes.
-- VSCode tasks: `Build`, `Upload`, `Monitor`, `Build+Upload+Monitor`, `HIL test`, `Host tests`, each with `${input:sketch}` pick-list of sketch dirs.
+- `find_port.py [--vidpid 303A:1001]` → prints port, exit 0; else exit 2 with `no M5Dial found (VID:PID 303A:1001). Plug in, or hold the knob button while plugging in for download mode.`
+- `build.sh <sketch-dir>` → `arduino-cli compile --config-file sketch/arduino-cli.yaml --fqbn "$M5DIAL_FQBN" --build-path sketch/.build/<Name> <dir>`; FQBN in `deps.txt` (expected `m5stack:esp32:m5stack_dial`; confirm via `arduino-cli board listall dial`). Outputs `<Name>.ino.elf` / `.bin` there.
+- `upload.sh <sketch-dir> [port]`, `monitor.sh [port]`.
+- `device_test.py <sketch-dir> --expect <regex>... [--forbid <regex>...] [--timeout 20] [--no-upload]` → upload, reset via RTS, pass when all `--expect` match in order and no `--forbid` matched; prints log; exit 1 listing unmatched.
+- VSCode tasks `Build`, `Upload`, `Monitor`, `Build+Upload+Monitor`, `Device test`, `Host tests` with `${input:sketch}` pick-list.
 
-- [ ] **Step 1:** Install toolchain: `brew install arduino-cli`; `python3 -m venv sketch/tools/.venv && sketch/tools/.venv/bin/pip install pyserial pillow esptool`. Write `setup.sh` to do exactly this plus core + libs install from `deps.txt`. Run it. Expected: `arduino-cli core list` shows the m5stack core; `lib list` shows M5Dial 1.0.3.
-- [ ] **Step 2: Write failing test** `tests/test_find_port.py`: `test_picks_303a_1001` (fake `serial.tools.list_ports` entries incl. one `303A:1001` → returns its device), `test_none_found_exits_2_with_message` (asserts exit code 2 and message text above). Run `sketch/tools/.venv/bin/python -m unittest discover sketch/tools/tests` → FAIL (module missing).
-- [ ] **Step 3:** Implement `find_port.py` (`find_port(vidpid: str) -> str | None`, `main()`). Re-run → PASS. Run for real → prints `/dev/cu.usbmodem…`.
-- [ ] **Step 4: Backup + baseline (before any upload!):** `backup_flash.sh` → `esptool --chip esp32s3 -p $(find_port) read_flash 0 0x800000 sketch/backup/m5dial-factory-$(date +%F).bin` + `sha256sum` file. Run it; expected 8 388 608-byte file. Write `restore_flash.sh` (`write_flash 0 <file>`), do not run it. Record in `PORTING_NOTES.md`: on the original firmware, ask owner which way a clockwise turn moves the launcher (needed by Task 2).
-- [ ] **Step 5:** Blink smoke sketch (no library yet): `M5Dial.begin(); Serial.println("[M5DD] boot: smoke");` and fill the screen green. `tools/hil.py sketch/examples/Blink --expect 'boot: smoke'` → PASS. Ask owner: screen green?
-- [ ] **Step 6:** `gen_compile_commands.sh` (`arduino-cli compile --only-compilation-database`, copy to `sketch/.build/compile_commands.json`), `.vscode/settings.json` points C/C++ `compileCommands` there. Open `Blink.ino` in VSCode → no red squiggles on `M5Dial`.
-- [ ] **Step 7:** SETUP.md draft covering spec §5.6 points 1–9 as actually executed above (macOS verified; Linux/Windows/WSL from `hotplugSetup.sh` notes marked "untested").
-- [ ] **Step 8: Commit** `chore(sketch): toolchain, VSCode tasks, HIL harness, flash backup tooling` (backup binary is git-ignored).
+- [ ] **Step 1:** `brew install arduino-cli`; venv `sketch/tools/.venv` with `pyserial pillow esptool bleak`. `setup.sh` does this + core/lib install from `deps.txt`. Run → `arduino-cli lib list` shows M5Dial 1.0.3.
+- [ ] **Step 2: Failing test** `test_find_port.py`: `test_picks_303a_1001`, `test_none_found_exits_2_with_message` (mock `serial.tools.list_ports.comports`). Run `.venv/bin/python -m unittest discover sketch/tools/tests` → FAIL.
+- [ ] **Step 3:** Implement `find_port(vidpid: str) -> str | None` + `main()`. Tests PASS; real run prints `/dev/cu.usbmodem…`.
+- [ ] **Step 4: Backup before any upload:** `backup_flash.sh` = `esptool --chip esp32s3 -p $(find_port) read_flash 0 0x800000 sketch/backup/m5dial-factory-<date>.bin` + `.sha256`. Run → 8 388 608-byte file. Write `restore_flash.sh` (`write_flash 0 <file>`), don't run.
+- [ ] **Step 5:** `Smoke.ino`: `M5Dial.begin(); M5_LOGI("boot: smoke");` fill screen green. `device_test.py examples/Smoke --expect 'boot: smoke'` → PASS.
+- [ ] **Step 6:** `gen_compile_commands.sh` (`--only-compilation-database` → `sketch/.build/compile_commands.json`); `.vscode/settings.json` points C/C++ at it.
+- [ ] **Step 7:** SETUP.md draft from spec §5.6 items 1–8 as executed (macOS verified; Linux/Windows/WSL marked untested).
+- [ ] **Step 8: Commit** `chore(sketch): toolchain, VSCode tasks, device test harness, flash backup`.
 
-### Task 2: Shared library core — HAL facade, logging, Mooncake base  *(issue 2)*
+### Task 2: Virtual M5Dial spike — display autodetect (go/no-go)  *(issue 2)*
 
-**Files:** Create `libraries/M5DialDemo/library.properties` (`name=M5DialDemo`, `depends=M5Dial,M5Unified,M5GFX`, `architectures=esp32`), `src/M5DialDemo.h`, `src/config.h`, `src/log.h`, `src/hal/*`, `src/mooncake/*`, `test/host/{test_detent_quantizer.cpp,test_button_facade.cpp,run.sh}`, `sketch/tools/test_host.sh`, `examples/HalProbe/HalProbe.ino` (kept: diagnostic sketch).
+**Files:** `sketch/sim/{wokwi.toml.in,diagram.json}`, `sketch/sim/chips/gc9a01/{gc9a01.chip.json,gc9a01.chip.c,Makefile}`, `sketch/tools/sim.sh`, `sketch/sim/scenarios/Smoke/boot.test.yaml`.
 
-**Interfaces — Produces** (namespace `HAL`, mirrors `main/hal/*` public API used by apps):
-- `class DetentQuantizer { explicit DetentQuantizer(int countsPerStep); bool update(int32_t rawCount); int direction() const; void reset(int32_t rawCount); }` — header-only, no Arduino deps; step index = floor(raw / countsPerStep); `update` returns true when step index changed; `direction()` = `+1` when step index *decreased*, `-1` when increased (original sign).
-- `class Encoder { bool wasMoved(bool updateDirection = false); int getDirection(); Button btn; void begin(); }` — wraps `M5Dial.Encoder.read()` through `DetentQuantizer(kEncoderCountsPerStep)`, `constexpr int kEncoderCountsPerStep = 4;` in `config.h`.
-- `class Button { bool read(); bool pressed(); bool released(); void begin(); void setPin(int); }` — `read()` returns `true` when **released** (debounced, 25 ms, matching `main/hal/utils/Button`), driven by an injectable `std::function<bool()> rawPressed` (default: `M5Dial.BtnA.isPressed()` after `M5Dial.update()`), `millis` injectable for host tests.
-- `struct TouchPoint_t { uint8_t touch_num = 0; int x = -1; int y = -1; };` `class Touch { bool isTouched(); void update(); TouchPoint_t getTouchPointBuffer(); const TouchPoint_t& readPos(); }` over `M5Dial.Touch.getDetail()`.
-- `class Rtc { int getTime(tm& t); int setAlarmIRQ(int afterSeconds); void clearIRQ(); void disableIRQ(); }` over `M5Dial.Rtc`.
-- `class Buzzer { void tone(unsigned freq, unsigned long durationMs = 0); void noTone(); }` over `M5Dial.Speaker`.
-- `class HAL { M5GFX& display; LGFX_Sprite* canvas; Buzzer buzz; Encoder encoder; Touch tp; Rtc rtc; void init(); void powerOn(); void powerOff(); }` — `init()` = `M5Dial.begin(cfg, true, true)`, canvas `createSprite(240,240)` 16 bpp. If M5GFX lacks the `LGFX_Sprite` name, `using LGFX_Sprite = M5Canvas;` in `hal.h`.
-- `M5DD_LOG(tag, fmt, ...)` in `log.h`.
-- `mooncake/app.h` = `MOONCAKE::APP_BASE` verbatim from `main/apps/app.h`; `gui_base.*` from `main/apps/utilities/gui_base/` with `<LovyanGFX.hpp>` → `<M5GFX.h>`.
+**Interfaces — Produces:**
+- `sim.sh <sketch-dir> <scenario.yaml> [--timeout-ms 30000]` → builds via `build.sh`, renders `wokwi.toml` from `wokwi.toml.in` (firmware/elf = that sketch's build output, `[[chip]]` entries for every built chip), runs `wokwi-cli sketch/sim --scenario <yaml> --timeout <ms>`; exit code = wokwi-cli's. Fails fast with a message if `WOKWI_CLI_TOKEN` unset.
+- `diagram.json`: `board-esp32-s3-devkitc-1` + `gc9a01` chip wired to the M5Dial display pins (copy MOSI/SCLK/DC/CS/RST/BL from M5GFX's M5Dial board setup in its source, record file+line in a comment in `PORTING_NOTES.md`).
+- `gc9a01` chip: SPI device; implements command set M5GFX's GC9A01 panel driver sends (init sequence accepted, `CASET`/`RASET`/`RAMWR` into a 240×240 RGB565 framebuffer); answers ID reads M5GFX autodetect performs.
+- Chips build with wasi-sdk following the official Wokwi chip template Makefile; `.chip.wasm` git-ignored, built by `sim.sh`.
 
-- [ ] **Step 1: Failing host tests.** `test_detent_quantizer.cpp`: `counts 0..3 → no move`, `4 → moved, direction -1`, `back to 0 → moved, direction +1`, `-1 → moved (floor), -4 → no further move`, `+8 in one jump → one move`. `test_button_facade.cpp`: raw not pressed → `read()==true`; raw pressed for 30 ms → `read()==false`, `pressed()==true` once; bounce 5 ms → still `true`. `tools/test_host.sh` = `c++ -std=c++17 -I src test/host/*.cpp -o /tmp/... && run`. Run → FAIL (headers missing).
-- [ ] **Step 2:** Implement `detent_quantizer.h`, `button_facade.h/.cpp` (core logic Arduino-free). Run `test_host.sh` → all PASS.
-- [ ] **Step 3:** Implement remaining facades, `HAL`, `log.h`, `config.h`, mooncake. `build.sh examples/HalProbe` → compiles.
-- [ ] **Step 4: HalProbe** logs `init: display WxH`, `init: rtc ok`, `init: rfid ok|missing`, then events `enc: dir=±1`, `btn: down|up`, `touch: x=.. y=..`, `rtc: YYYY-MM-DD HH:MM:SS` each second. HIL: `hil.py examples/HalProbe --expect 'init: display 240x240' 'init: rtc ok' 'rtc: 20'` → PASS.
-- [ ] **Step 5: Owner checks (prompt):** turn exactly one detent CW → exactly one `enc:` line with the sign matching the Task 1 observation; press/release → one `btn: down`, one `btn: up`; touch centre → x,y ≈ 120,120. Adjust `kEncoderCountsPerStep`/sign if not; re-run host tests.
-- [ ] **Step 6: Commit** `feat(lib): M5DialDemo HAL facade over M5Dial, logging, mooncake base`.
+- [ ] **Step 1: Failing scenario** `boot.test.yaml`: `wait-serial: 'boot: smoke'` within 20 s; plus screenshot step if supported (display fully green). `sim.sh examples/Smoke sim/scenarios/Smoke/boot.test.yaml` → FAIL (no chip/diagram).
+- [ ] **Step 2:** Implement diagram + `gc9a01` chip. Read M5GFX autodetect code path for the Dial to see exactly which reads must answer.
+- [ ] **Step 3:** Run → PASS: serial line seen and Smoke reports `M5.getBoard() == board_M5Dial` (add `M5_LOGI("board: %d", M5.getBoard())` to Smoke; expect `board: <id of board_M5Dial>`).
+- [ ] **Step 4: Go/no-go.** If autodetect fails: try `cfg.fallback_board = m5::board_t::board_M5Dial` behind `-DM5DD_SIM` (only allowed sim-only difference; record in PORTING_NOTES). If that also fails, **stop and report to owner** (re-plan: spec §5.7 fallback).
+- [ ] **Step 5:** Same Smoke ELF still passes `device_test.py` on hardware.
+- [ ] **Step 6: Commit** `feat(sim): virtual M5Dial display chip and wokwi harness`.
 
-### Task 3: Assets + png2rgb565  *(issue 3)*
+### Task 3: Virtual M5Dial completion + DialProbe  *(issue 3)*
 
-**Files:** Create `tools/png2rgb565.py`, `tools/tests/test_png2rgb565.py`, `libraries/M5DialDemo/src/assets/{launcher_icons,temp_demo_icons}/*.h` + `assets/png/*.png` (copied from `main/apps/launcher/launcher_icons`, `main/apps/app_temp_demo/gui/temp_demo_icons`).
+**Files:** `sketch/sim/chips/{ft3267,pcf8563,ws1850s}/*`, `diagram.json` (add KY-040 on 40/41, pushbutton on 42, buzzer on 3, NeoPixel ×14 on 2, potentiometer on 1, Wokwi Wi-Fi), `sketch/examples/DialProbe/DialProbe.ino`, `sketch/sim/scenarios/DialProbe/*.test.yaml`. Delete `examples/Smoke` (move its scenario/device check to DialProbe).
 
-**Interfaces — Produces:** `png2rgb565.py <in.png> <out.h> --name <ident> [--bg 0x000000]` emitting the same layout as the existing headers (`static const uint16_t image_data_<name>[W*H]`, header comment noting tool). Python API `convert(png_path, bg=0x000000) -> (w, h, list[int])`, `parse_header(h_path) -> list[int]`.
+**Interfaces — Produces:**
+- Chip controls (names fixed, used by every later scenario): `ft3267`: `x` (0–239), `y` (0–239), `touched` (0/1). `pcf8563`: starts from host UTC; implements time regs + alarm/timer + IRQ pin. `ws1850s`: `card_present` (0/1), `uid0..uid3` (0–255); MFRC522 register subset for REQA, anticollision CL1, SELECT, HLTA. Pins/addresses copied from M5Unified's M5Dial setup.
+- If the KY-040 can't be driven from scenarios, add chip `encoder` with control `steps` (signed; each change emits that many CW/CCW quadrature cycles on 40/41) — decision recorded in PORTING_NOTES.
+- `DialProbe.ino` (permanent diagnostic sketch, uses Task 4 `EncoderDetent` once it exists — until then raw counts): logs `init: display 240x240`, `init: rtc ok|fail`, `init: touch ok|fail`, `init: rfid ok|fail`, then events `enc: steps=<±n> raw=<n>`, `btn: pressed|released`, `touch: x=<n> y=<n>`, `rtc: YYYY-MM-DD HH:MM:SS` (1 Hz), `rfid: uid=<HEX:..>`.
 
-- [ ] **Step 1: Failing test** `test_regenerates_all_existing_headers`: for each of the 18 PNG/H pairs, `convert(png) == parse_header(h)` element-wise. Run → FAIL.
-- [ ] **Step 2:** Implement; alpha handling (composite on `--bg` vs ignore alpha) chosen by whichever makes all 18 match; `// why:` comment records it. Run → PASS.
-- [ ] **Step 3:** Copy headers into library unchanged; one umbrella `assets/launcher_icons.h` like the original. `build.sh examples/HalProbe` still compiles with assets included.
-- [ ] **Step 4: Commit** `feat(lib): image assets and png2rgb565 regeneration tool`.
+- [ ] **Step 1: Failing scenarios** in `scenarios/DialProbe/`: `init.test.yaml` (all four `init: … ok`), `encoder.test.yaml` (one CW detent → `enc: steps=1`; one CCW → `enc: steps=-1`), `button.test.yaml` (press → `btn: pressed`, release → `btn: released`), `touch.test.yaml` (x=120,y=60,touched=1 → `touch: x=120 y=60`), `rtc.test.yaml` (two `rtc:` lines 1 s apart), `rfid.test.yaml` (uid DE:AD:BE:EF, card_present=1 → `rfid: uid=DE:AD:BE:EF`). Run all → FAIL.
+- [ ] **Step 2:** Implement chips + DialProbe until all PASS.
+- [ ] **Step 3:** `device_test.py examples/DialProbe --expect 'init: display 240x240' 'init: rtc ok' 'init: touch ok' 'init: rfid ok' 'rtc: 20'` → PASS on hardware (proves sim and device agree on init).
+- [ ] **Step 4:** VSCode tasks `Simulate` (opens Wokwi panel) and `Sim test` (`sim.sh` with scenario pick-list). SETUP.md item 9.
+- [ ] **Step 5: Commit** `feat(sim): touch, RTC, RFID chips, input parts, DialProbe`.
 
-### Task 4: smooth_menu + Launcher + UserDemo.ino  *(issue 4)*
+### Task 4: Shared library core  *(issue 4)*
 
-**Files:** Create `src/smooth_menu/**` (from `main/apps/utilities/smooth_menu/src` + LICENSE), `src/apps/launcher/**` (from `main/apps/launcher`), `sketch/UserDemo/UserDemo.ino`, `secrets.example.h`. Delete `examples/Blink`.
+**Files:** `libraries/M5DialDemo/{library.properties,src/M5DialDemo.h,src/config.h,src/app_context.h,src/encoder_detent.h,src/m5dd_begin.{h,cpp},src/mooncake/*}`, `test/host/test_encoder_detent.cpp`, `sketch/tools/test_host.sh`. Update DialProbe to use the library.
 
-**Interfaces:** Consumes Task 2 `HAL`, Task 3 icons. Produces `MOONCAKE::USER_APP::Launcher` (unchanged API). Launcher's app factory switch (original `launcher.cpp:276-297`) creates apps from later tasks; entries not yet ported open a placeholder that logs `app: <name> not ported` and closes. Launcher logs `app: open <name>` / `app: close <name>`.
-`UserDemo.ino`: `setup()` = `hal.init()` + factory-test check (button held >1000 ms at boot → double 4 kHz/30 ms beep → FactoryTest; guarded by `#ifdef ENABLE_FACTORY_TEST`, FactoryTest itself arrives in Task 13 — until then log `factory: not ported`); `loop()` = `launcher.onRunning()`.
+**Interfaces — Produces:**
+- `library.properties`: `name=M5DialDemo`, `depends=M5Dial,M5Unified,M5GFX`, `architectures=esp32`.
+- `struct AppContext { M5Canvas* canvas; };`
+- `class EncoderDetent { public: explicit EncoderDetent(int countsPerDetent = M5DD_ENCODER_COUNTS_PER_DETENT, int cwSign = M5DD_ENCODER_CW_SIGN); int32_t update(int32_t rawCount); void reset(int32_t rawCount); };` — header-only, no Arduino includes; detent index = floor(raw / countsPerDetent); `update` returns detent delta since last call × `cwSign` (positive = clockwise). `config.h`: `M5DD_ENCODER_COUNTS_PER_DETENT 4`, `M5DD_ENCODER_CW_SIGN` (value from Task 3 encoder scenario).
+- `namespace m5dd { void begin(const char* sketchName, M5Canvas& canvas); void runStandalone(MOONCAKE::APP_BASE& app, AppContext& ctx); }` — `begin`: `M5Dial.begin(M5.config(), true, true)`, serial log level INFO, `canvas.createSprite(240, 240)` 16 bpp, `M5_LOGI("boot: %s", sketchName)`. `runStandalone`: `setUserData(&ctx)`, `onSetup/onCreate`, then forever `M5Dial.update(); app.onRunning();` and on `isGoingClose()||isGoingDestroy()` → `onDestroy()`, `M5_LOGI("app: restart")`, `ESP.restart()`.
+- `mooncake/app.h` = `MOONCAKE::APP_BASE` from `main/apps/app.h` (framework, unchanged API); `gui_base.*` with `LGFX_Sprite*` → `M5Canvas*`, `<LovyanGFX.hpp>` → `<M5GFX.h>`.
 
-- [ ] **Step 1:** Port smooth_menu (include paths only). Port launcher (HAL type changes only). `build.sh UserDemo` → compiles, zero new warnings in our files.
-- [ ] **Step 2: HIL:** `hil.py UserDemo --expect 'boot: UserDemo' 'launcher: ready'` → PASS.
-- [ ] **Step 3: Owner checks:** icons ring renders like original, knob scrolls smoothly, press opens placeholder and returns. Add Launcher section to `TEST_CHECKLIST.md`.
-- [ ] **Step 4: Commit** `feat(sketch): launcher and smooth_menu on M5Dial library`.
+- [ ] **Step 1: Failing host test** `test_encoder_detent.cpp`: raw 0→3 → 0 steps; →4 → +1 (cwSign=+1); →0 → −1; →−1 → −1 (floor); →−4 → 0; jump 0→12 → +3; cwSign=−1 inverts. `test_host.sh` = `c++ -std=c++17 -Isrc test/host/*.cpp && ./a.out`. Run → FAIL.
+- [ ] **Step 2:** Implement `encoder_detent.h` → PASS.
+- [ ] **Step 3:** Implement rest; DialProbe switched to `m5dd::begin` + `EncoderDetent`. All DialProbe sim scenarios + device test still PASS.
+- [ ] **Step 4: Commit** `feat(lib): M5DialDemo core — app framework, encoder detents, bootstrap`.
 
-### Tasks 5–8: Simple apps — LCD test, RTC test, Brightness, Temp demo  *(issues 5–8, one each)*
+### Task 5: Assets + png2rgb565  *(issue 5)*
 
-Same shape for each; one task, branch and PR per app.
+**Files:** `tools/png2rgb565.py`, `tools/tests/test_png2rgb565.py`, `libraries/M5DialDemo/src/assets/**` (headers + PNGs copied from `main/apps/launcher/launcher_icons`, `main/apps/app_temp_demo/gui/temp_demo_icons`).
 
-| Task | App class (keep name) | Source | Example sketch | HIL expects | Owner checks |
-|---|---|---|---|---|---|
-| 5 | `LCD_Test` | `main/apps/app_lcd_test` | `examples/LcdTest` | `app: open LCD_Test`, `lcd: pattern 0` | colour patterns cycle with knob, quit works |
-| 6 | `RTC_Test` | `main/apps/app_rtc_test` | `examples/RtcTest` | `rtc: 20\d\d-` twice, seconds increasing | time shown and ticking |
-| 7 | `Set_Brightness` | `main/apps/app_set_brightness` | `examples/Brightness` | `brightness: \d+` after encoder move | backlight visibly changes |
-| 8 | `VideoShit` (display name unchanged) | `main/apps/app_temp_demo` | `examples/TempDemo` | `app: open Video Shit`, `temp: frame` | animation + button images as original |
+**Interfaces — Produces:** CLI `png2rgb565.py <in.png> <out.h> --name <ident> [--bg 0x000000]` emitting `static const uint16_t image_data_<name>[W*H]` like the existing lcd-image-converter headers; API `convert(png_path, bg=0x000000) -> (w, h, list[int])`, `parse_header(path) -> list[int]`.
 
-- [ ] **Step 1:** Port `src/apps/<app>/` (app + gui, HAL types/includes only; add `M5DD_LOG` lines listed above).
-- [ ] **Step 2:** Example sketch: `HAL::HAL hal; <App> app;` — `setup()`: `hal.init(); app.setUserData(&hal); app.onSetup(); app.onCreate();` `loop()`: `app.onRunning(); if (app.isGoingClose()||app.isGoingDestroy()) { app.onDestroy(); M5DD_LOG("app","restart"); ESP.restart(); }` — put this in one shared helper `runStandalone(APP_BASE&, HAL&)` in `M5DialDemo.h` (created in Task 5, reused after).
-- [ ] **Step 3:** Wire into launcher factory switch. `build.sh` both sketches → compile.
-- [ ] **Step 4:** HIL both sketches with the expects above → PASS. Prompt owner checks; append to `TEST_CHECKLIST.md`.
-- [ ] **Step 5: Commit** `feat(apps): port <App>`.
-
-### Task 9: RFID test  *(issue 9)*
-
-**Files:** `src/apps/rfid_test/**`, `examples/RfidTest`.
-**Interfaces:** Replace `esp-idf-rc522` event callback with polling in `onRunning()`: `if (M5Dial.Rfid.PICC_IsNewCardPresent() && M5Dial.Rfid.PICC_ReadCardSerial())` → format UID as uppercase hex `AA:BB:CC:DD`, hand to GUI the same way the callback did, beep 4 kHz/30 ms, log `rfid: uid=<hex>`; then `PICC_HaltA()`.
-- [ ] **Step 1:** Host test `test/host/test_uid_format.cpp` for `std::string formatUid(const uint8_t* b, uint8_t n)` (4- and 7-byte UIDs, leading zero bytes). FAIL → implement in `src/apps/rfid_test/uid_format.h` → PASS.
-- [ ] **Step 2:** Port app/gui, sketch, launcher wiring; compile both.
-- [ ] **Step 3:** HIL `--expect 'app: open RFID_Test' 'rfid: ready'`; then prompt owner to present a card, `hil.py --no-upload --expect 'rfid: uid=[0-9A-F:]+' --timeout 60` → PASS.
-- [ ] **Step 4: Commit** `feat(apps): port RFID test to MFRC522 API`.
-
-### Task 10: Wi-Fi scan  *(issue 10)*
-
-**Files:** `src/apps/wifi_scan/**`, `src/apps/common/wifi_common.{h,cpp}` (Arduino replacement for `wifi_common_test.cpp` APIs the apps call), `examples/WifiScan`.
-**Interfaces:** `WiFi.mode(WIFI_STA); WiFi.scanNetworks(/*async*/true)`; poll `WiFi.scanComplete()` in `onRunning()`; read count first, then records (`SSID(i)`, `RSSI(i)`) — the d49e20e fix intent; `WiFi.scanDelete()`; on close `WiFi.mode(WIFI_OFF)`. Log `wifi: ap_count=<n>`, then one `wifi: <rssi> <ssid>` per AP.
-- [ ] **Step 1:** Port, compile.
-- [ ] **Step 2:** HIL `--expect 'wifi: ap_count=[1-9]'` (owner's environment has APs) → PASS. Repeat scan via knob/press → second `ap_count` line, no crash.
-- [ ] **Step 3: Commit** `feat(apps): port Wi-Fi scan to WiFi.h`.
-
-### Task 11: BLE server  *(issue 11)*
-
-**Files:** `src/apps/ble_server/**`, `src/apps/common/ble_demo.{h,cpp}` (NimBLE-Arduino rewrite of `ble_demo.c` + `gatt_svr.c`), `examples/BleServer`.
-**Interfaces:** Keep `void ble_demo_start(); BleDemoInfos_t* ble_demo_get_infos();` with `const char* device_name; int* sending_data; bool* is_connected; bool* is_subscribed;` (same fields the GUI reads). Services: Heart Rate `0x180D` (Measurement `0x2A37` notify, Body Sensor Location `0x2A38` read), Device Info `0x180A` (Manufacturer `0x2A29`, Model `0x2A24`) — copy string values and notify interval from `gatt_svr.c`/`ble_demo.c`. Device name as original. Log `ble: advertising <name>`, `ble: connected=0|1`, `ble: subscribed=0|1`.
-- [ ] **Step 1:** Port, compile.
-- [ ] **Step 2:** HIL `--expect 'ble: advertising'`. Owner connects with nRF Connect, subscribes to 0x2A37 → `hil.py --no-upload --expect 'ble: connected=1' 'ble: subscribed=1'` → PASS; on screen counter increments.
-- [ ] **Step 3: Commit** `feat(apps): port BLE heart-rate server to NimBLE-Arduino`.
-
-### Task 12: More menu + power handling + soak  *(issue 12)*
-
-**Files:** `src/apps/more_menu/**` (drop the three LVGL entries and `lv_demos` include), `hal.cpp` `powerOff()` = `M5Dial.Power.powerOff()`.
-- [ ] **Step 1:** Port, compile UserDemo.
-- [ ] **Step 2:** HIL soak (Review Focus 5): add `M5DD_LOG("heap", "free=%u min=%u", ...)` on every `app: close`. Owner opens Wi-Fi scan → back → BLE → back → Wi-Fi → back. `hil.py --no-upload --timeout 180 --expect 'app: close WiFi_Scan' 'app: close BLE_Server' 'app: close WiFi_Scan'` → PASS, no reboot (`boot:` must not reappear — add `--forbid 'boot:'` option to `hil.py`). Record min heap in PORTING_NOTES.md.
-- [ ] **Step 3:** Owner: Power Off powers down; button press wakes.
-- [ ] **Step 4: Partition check:** UserDemo (now containing Wi-Fi + BLE) `build.sh` reports sketch size vs maximum. If usage > 90 %, add `sketch/UserDemo/partitions.csv` (factory app 4 MB as original, no FAT `storage`) and note it in PORTING_NOTES; otherwise record the percentage and keep the default scheme.
-- [ ] **Step 5: Commit** `feat(apps): port More menu and power-off`.
-
-### Task 13: Factory test with jig, verdicts, summary  *(issue 13)*
-
-**Files:** `src/apps/factory_test/**` (from `main/apps/app_factory_test`), `src/apps/factory_test/report.h` (Arduino-free), `test/host/test_report.cpp`, `sketch/docs/FACTORY_TEST_JIG.md`; deps add Adafruit NeoPixel.
-**Interfaces:**
-- `enum class Step { Lcd, Rtc, Rfid, Io }; enum class Verdict { Pending, Pass, Fail, Skip };`
-- `class FactoryReport { void set(Step, Verdict); Verdict get(Step) const; bool allPassedOrSkipped() const; std::string line(Step) const; /* e.g. "IO: SKIP" */ std::string serial() const; /* "factory: LCD=PASS RTC=PASS RFID=FAIL IO=SKIP" */ };`
-- `Verdict promptVerdict(HAL::HAL&, const char* stepName)` — round screen with three options PASS/FAIL/SKIP, knob selects, press confirms, default highlight PASS.
-- IO step: NeoPixel 14 px on GPIO2; `analogReadMilliVolts(1)`; LED count = original mapping (`3000 - mv`, clamp 2900→3000, `/500`); Port A scan via `M5Dial.Ex_I2C` every 800 ms, list addresses. Each step logs `factory: step <name>`.
-- Flow: LCD → RTC → RFID → IO (each followed by `promptVerdict`) → summary screen + `M5DD_LOG(report.serial())` → press → RTC wake-up test (`setAlarmIRQ(4)`, power off, RTC wakes device).
-- [ ] **Step 1: Failing host test** `test_report.cpp`: fresh report all `Pending`; set Io=Skip → `line(Io)=="IO: SKIP"`; `serial()` exact string above; `allPassedOrSkipped()` false with any Fail/Pending. FAIL → implement → PASS.
-- [ ] **Step 2:** Port steps + `promptVerdict` + summary, wire into `UserDemo.ino` boot check. Compile.
-- [ ] **Step 3:** HIL: owner holds button while `hil.py UserDemo` resets → expect `factory: step LCD` … `factory: LCD=` → owner chooses verdicts, skips IO on bare device → expect `IO=SKIP`; after wake-up `boot: UserDemo` reappears (RTC wake works).
-- [ ] **Step 4:** FACTORY_TEST_JIG.md: wiring (Port B GPIO2 → WS2812 DIN, 14 LEDs, 5V/GND; GPIO1 ← pot wiper 0–3.3 V; Port A any I2C device), and the owner runs once with the jig when built (checklist item, may stay open).
-- [ ] **Step 5: Commit** `feat(apps): port factory test with operator verdicts and summary`.
-
-### Task 14: LvglDemo  *(issue 14)*
-
-**Files:** `examples/LvglDemo/LvglDemo.ino`, `examples/LvglDemo/lv_conf.h`; deps add `lvgl` 9.x.
-**Interfaces:** Independent of M5DialDemo except `log.h`. Build flags only for this sketch: compile via `build.sh` with `--build-property "compiler.cpp.extra_flags=-DLV_CONF_INCLUDE_SIMPLE -I<sketch dir>"` (wired in `build.sh` when `lv_conf.h` exists in the sketch dir). Display: `lv_display_create(240,240)`, partial buffer 240×24×2 B, flush → `M5Dial.Display.pushImage`. Input: encoder indev (`LV_INDEV_TYPE_ENCODER`, diff from `M5Dial.Encoder`/4, press from BtnA) + pointer indev from Touch. UI: `lv_arc` 0–100 bound to knob via `lv_group`, value label centre, one button that toggles arc colour. Log `lvgl: value=<n>`.
-- [ ] **Step 1:** Implement, compile; confirm other sketches still compile (no `lv_conf.h` leakage).
-- [ ] **Step 2:** HIL `--expect 'lvgl: ready'`; owner turns knob → `lvgl: value=` lines; arc renders round and smooth.
-- [ ] **Step 3: Commit** `feat(examples): LVGL 9 starter sketch`.
-
-### Task 15: CI compile  *(issue 15)*
-
-**Files:** `.github/workflows/sketch-build.yml`.
-- [ ] **Step 1:** Workflow on push/PR touching `sketch/**`: setup arduino-cli, cache `~/.arduino15`, run `sketch/tools/setup.sh --ci` (no venv pillow needed), `test_host.sh`, python unit tests, `build.sh` for every dir containing a same-named `.ino`. Secrets: CI copies `secrets.example.h` → `secrets.h`.
-- [ ] **Step 2:** Push branch → workflow green. Break a sketch locally on a scratch commit → red (then drop the commit).
-- [ ] **Step 3: Commit** `ci: compile all sketches and run host tests`.
-
-### Task 16: Documentation finalisation  *(issue 16)*
-
-**Files:** `sketch/docs/{SETUP.md,PORTING_NOTES.md,TEST_CHECKLIST.md}`, `sketch/README.md`, root `README.md` (one link line to `sketch/README.md` only).
-- [ ] **Step 1:** Fresh-machine check: new macOS user account (or `ARDUINO_DIRECTORIES_DATA` temp dir) following SETUP.md verbatim → `Build+Upload+Monitor` of UserDemo works. Fix every deviation in the doc.
-- [ ] **Step 2:** PORTING_NOTES: spec §5.2 table as-built, encoder/button semantics, heap numbers, known differences from original.
-- [ ] **Step 3:** TEST_CHECKLIST complete for every sketch; owner runs full list once.
-- [ ] **Step 4: Commit** `docs(sketch): finalise setup, porting notes, test checklist`.
+- [ ] **Step 1: Failing test** `test_regenerates_all_existing_headers`: all 18 PNG/H pairs, `convert(png)[2] == parse_header(h)`. → FAIL.
+- [ ] **Step 2:** Implement; pick alpha handling (composite on bg vs ignore) that makes all 18 match, `// why:` note. → PASS.
+- [ ] **Step 3:** Copy headers; umbrella `assets/launcher_icons.h`. DialProbe still compiles with assets included.
+- [ ] **Step 4: Commit** `feat(lib): image assets and png2rgb565 tool`.
 
 ---
 
-## GitHub tracking (after plan approval, owner confirms list first)
+## Phase 2 — Port (each task: port app → standalone sketch → launcher wiring → sim scenarios → device smoke)
 
-- Epic: "Port UserDemo to Arduino sketches (M5Dial library)" linking spec + this plan, task list of the 16 issues.
-- Issues 1–16 = Tasks 1–16 (5–8 split, one each). Labels: `arduino-port`, plus `infra` (1,2,3,15), `app` (4–14), `docs` (16). Each issue body = task text + its owner checklist.
-- Repo: `beyonddemise/M5Dial-UserDemo`. Dependencies: 2←1, 3←1, 4←2,3, 5–12←4, 13←4,9, 14←1, 15←1, 16←all.
+Common rules for Tasks 6–16:
+- Port = copy original app + gui into `src/apps/<app>/`, then replace every hardware call per spec §5.2 (no wrappers), `VideoShit`→`TempDemo`, `LGFX_Sprite`→`M5Canvas`, `_log/printf`→`M5_LOGI`.
+- Standalone sketch = `m5dd::begin("<Sketch>", canvas); m5dd::runStandalone(app, ctx);` (~15 lines).
+- Every app logs `app: open <Name>` in `onCreate` and `app: close <Name>` in `onDestroy`.
+- Scenarios live in `sim/scenarios/<Sketch>/`; device smoke = `device_test.py <sketch> --expect 'boot: <Sketch>' 'app: open <Name>'`.
+
+### Task 6: smooth_menu + Launcher + UserDemo  *(issue 6)*
+
+**Files:** `src/smooth_menu/**`, `src/apps/launcher/**`, `sketch/UserDemo/{UserDemo.ino,secrets.example.h}`, `sim/scenarios/UserDemo/*.test.yaml`.
+**Interfaces:** `MOONCAKE::USER_APP::Launcher` (framework API unchanged). Launcher factory (original `launcher.cpp:276-297`) creates apps; unported entries log `app: <name> not ported` and return. Launcher logs `launcher: ready`, `launcher: select <index> <name>` on each step. `UserDemo.ino`: `m5dd::begin("UserDemo", canvas)`; if `ENABLE_FACTORY_TEST` and `M5Dial.BtnA.isPressed()` stays pressed > 1000 ms at boot (looping with `M5Dial.update()`) → double 4 kHz/30 ms tone → factory test (Task 15; until then `factory: not ported`); else launcher loop.
+- [ ] **Step 1: Failing scenarios:** `boot.test.yaml` (`launcher: ready`); `cw_selects_next.test.yaml` (one CW detent → `launcher: select 1`); `ccw_wraps.test.yaml` (one CCW from 0 → `launcher: select 7`); `press_hold_release_opens_app.test.yaml` (press, hold 500 ms, release → `app: open` or `not ported` line, then `launcher: ready` again after app quits) — Review Focus 1; `touch_icon_opens.test.yaml` (touch an icon position → its `select`).
+- [ ] **Step 2:** Port smooth_menu (include paths) + launcher + UserDemo until scenarios PASS. Golden screenshot `golden/UserDemo/launcher.png` committed if screenshots supported.
+- [ ] **Step 3:** Device smoke `--expect 'boot: UserDemo' 'launcher: ready'` → PASS.
+- [ ] **Step 4: Commit** `feat(sketch): launcher and smooth_menu on M5Dial API`.
+
+### Tasks 7–10: LCD test, RTC test, Brightness, Temp demo  *(issues 7–10, one each)*
+
+| Task | App class | Source | Sketch | Scenario assertions (serial) |
+|---|---|---|---|---|
+| 7 | `LCD_Test` | `main/apps/app_lcd_test` | `LcdTest` | `lcd: pattern 0`; CW → `lcd: pattern 1`; press quits → `app: close LCD_Test` |
+| 8 | `RTC_Test` | `main/apps/app_rtc_test` | `RtcTest` | two `rtc: 20\d\d-…` lines with increasing seconds |
+| 9 | `Set_Brightness` | `main/apps/app_set_brightness` | `Brightness` | CW ×3 → `brightness: <n>` increasing, CCW decreasing, clamped 0–255 |
+| 10 | `TempDemo` | `main/apps/app_temp_demo` | `TempDemo` | `temp: frame` lines; CW changes `temp: target=<n>` |
+
+- [ ] **Step 1:** Failing scenarios per table (sketch dir + also via UserDemo launcher: select → open → quit).
+- [ ] **Step 2:** Port + sketch + launcher wiring → scenarios PASS.
+- [ ] **Step 3:** Device smoke → PASS.
+- [ ] **Step 4: Commit** `feat(apps): port <App>`.
+
+### Task 11: RFID test  *(issue 11)*
+
+**Files:** `src/apps/rfid_test/{app_rfid_test.*,gui/*,uid_format.h}`, `test/host/test_uid_format.cpp`, `examples/RfidTest`, scenarios.
+**Interfaces:** `std::string formatUid(const uint8_t* bytes, uint8_t len)` → uppercase hex joined by `:`. Poll in `onRunning()`: `M5Dial.Rfid.PICC_IsNewCardPresent() && M5Dial.Rfid.PICC_ReadCardSerial()` → GUI update, `M5Dial.Speaker.tone(4000, 30)`, `M5_LOGI("rfid: uid=%s", …)`, `PICC_HaltA()`. Log `rfid: ready` after init.
+- [ ] **Step 1: Failing host test** (4-byte, 7-byte, leading 0x00 → `00:…`) → implement → PASS.
+- [ ] **Step 2: Failing scenario** `card.test.yaml`: `rfid: ready`; set uid 04:A1:B2:C3 + card_present=1 → `rfid: uid=04:A1:B2:C3`; remove card, present again → second uid line (HaltA/re-detect works).
+- [ ] **Step 3:** Port → PASS. Device smoke `--expect 'rfid: ready'`.
+- [ ] **Step 4: Commit** `feat(apps): port RFID test to MFRC522 API`.
+
+### Task 12: Wi-Fi scan  *(issue 12)*
+
+**Files:** `src/apps/wifi_scan/**`, `examples/WifiScan`, scenarios.
+**Interfaces:** `WiFi.mode(WIFI_STA); WiFi.scanNetworks(true)`; poll `WiFi.scanComplete()` in `onRunning()`; read count first, then `SSID(i)/RSSI(i)` (d49e20e intent); `WiFi.scanDelete()`; `WiFi.mode(WIFI_OFF)` in `onDestroy`. Logs `wifi: ap_count=<n>`, `wifi: <rssi> <ssid>`.
+- [ ] **Step 1: Failing scenario** `scan.test.yaml`: `wifi: ap_count=` ≥1 and a line containing `Wokwi-GUEST`; trigger rescan via press → second `ap_count`.
+- [ ] **Step 2:** Port → PASS. Device smoke `--expect 'wifi: ap_count=[1-9]' --timeout 30`.
+- [ ] **Step 3: Commit** `feat(apps): port Wi-Fi scan to WiFi.h`.
+
+### Task 13: BLE server  *(issue 13)*
+
+**Files:** `src/apps/ble_server/{app_ble_server.*,gui/*,ble_heart_rate.{h,cpp}}`, `examples/BleServer`, `tools/ble_check.py`.
+**Interfaces:** `class BleHeartRateServer { void begin(const char* deviceName); bool isConnected() const; bool isSubscribed() const; uint8_t lastValue() const; void loop(); }` on NimBLE-Arduino (`NimBLEDevice`, `NimBLEServerCallbacks`, `NimBLECharacteristicCallbacks`). Services/values from `gatt_svr.c`/`ble_demo.c`: HRS `0x180D` (`0x2A37` notify, `0x2A38` read), Device Info `0x180A` (`0x2A29`, `0x2A24`), same device name, notify interval and counter behaviour. Logs `ble: advertising <name>`, `ble: connected=0|1`, `ble: subscribed=0|1`.
+`ble_check.py --name <name> [--notifications 3] [--timeout 30]` (bleak): scan → connect → read 0x2A38 → subscribe 0x2A37 → exit 0 after N notifications with increasing counter.
+- [ ] **Step 1:** Port. No sim scenario (Wokwi has no BLE); record BLE as device-only in PORTING_NOTES.
+- [ ] **Step 2: Device test:** `device_test.py examples/BleServer --expect 'ble: advertising'` then (no upload) run `ble_check.py` while `device_test.py --no-upload --expect 'ble: connected=1' 'ble: subscribed=1'` → both PASS.
+- [ ] **Step 3: Commit** `feat(apps): port BLE heart-rate server to NimBLE-Arduino`.
+
+### Task 14: More menu, power, memory soak, partitions  *(issue 14)*
+
+**Files:** `src/apps/more_menu/**` (drop the three LVGL entries + `lv_demos.h`), `examples/MemSoak/MemSoak.ino`, scenarios.
+**Interfaces:** Power Off → `M5Dial.Power.powerOff()` (log `power: off` first). `MemSoak`: programmatically runs WifiScan app (until `ap_count`), destroys it, BleServer app (5 s), destroys it, ×3; logs `heap: free=<n> min=<n>` after each; ends with `soak: done`.
+- [ ] **Step 1: Failing scenarios:** `more_menu_quit.test.yaml` (Quit → back to `launcher: ready`); `power_off.test.yaml` (`power: off` logged; sim end accepted).
+- [ ] **Step 2:** Port → PASS.
+- [ ] **Step 3: Soak (Review Focus 5):** `device_test.py examples/MemSoak --expect 'soak: done' --forbid 'boot: MemSoak.*boot: MemSoak' --timeout 180` → PASS (no reboot); record min heap in PORTING_NOTES.
+- [ ] **Step 4: Partition check:** UserDemo build size vs max; if > 90 %, add `UserDemo/partitions.csv` (4 MB app as original, no FAT) and note it; else record percentage.
+- [ ] **Step 5: Commit** `feat(apps): port More menu and power-off; memory soak`.
+
+### Task 15: Factory test  *(issue 15)*
+
+**Files:** `src/apps/factory_test/{app_factory_test.*,steps/*,report.h,verdict_prompt.*}`, `test/host/test_report.cpp`, scenarios; deps add Adafruit NeoPixel.
+**Interfaces:**
+- `enum class Step { Lcd, Rtc, Rfid, Io }; enum class Verdict { Pending, Pass, Fail, Skip };`
+- `class FactoryReport { void set(Step, Verdict); Verdict get(Step) const; bool allPassedOrSkipped() const; std::string line(Step) const; std::string serial() const; };` — `line(Io)` e.g. `"IO: SKIP"`; `serial()` exactly `"factory: LCD=PASS RTC=PASS RFID=FAIL IO=SKIP"`.
+- `Verdict promptVerdict(M5Canvas& canvas, const char* stepName)` — round screen, options PASS/FAIL/SKIP, `EncoderDetent` moves highlight (CW = next), `BtnA.wasPressed()` confirms, default PASS; logs `factory: verdict <step>=<v>`.
+- IO step: NeoPixel 14 px GPIO2; `analogReadMilliVolts(1)`; LED count = original (`3000 - mv`, `>2900`→3000, `/500`); Port A scan via `M5Dial.Ex_I2C` every 800 ms. Logs `factory: io adc=<mv> leds=<n> i2c=[<addrs>]`.
+- Flow: LCD → RTC → RFID → IO, each + `promptVerdict` → summary screen + `M5_LOGI("%s", report.serial().c_str())` → press → RTC wake-up (`M5Dial.Rtc.setAlarmIRQ(4)`, `M5Dial.Power.powerOff()`).
+- [ ] **Step 1: Failing host test** `test_report.cpp` (all Pending initially; `line`/`serial` exact strings; `allPassedOrSkipped` false on any Fail/Pending) → implement → PASS.
+- [ ] **Step 2: Failing scenarios:** `enter.test.yaml` (button held at boot 1.2 s → `factory: step LCD`); `skip_io.test.yaml` (PASS, PASS, present card + PASS, IO: pot set mid → `factory: io adc=` then CW×2 → SKIP → `factory: LCD=PASS RTC=PASS RFID=PASS IO=SKIP`); `io_leds.test.yaml` (pot at 0 V vs 3.3 V → `leds=` 6 vs 0, matching original mapping).
+- [ ] **Step 3:** Port → PASS. Device smoke: boot without button → `launcher: ready` (factory not entered by accident).
+- [ ] **Step 4:** `docs/FACTORY_TEST_JIG.md` wiring: Port B GPIO2 → WS2812 DIN (14 LEDs, 5 V, GND), GPIO1 ← pot wiper 0–3.3 V, Port A any I2C device.
+- [ ] **Step 5: Commit** `feat(apps): factory test with operator verdicts and summary`.
+
+### Task 16: LvglDemo  *(issue 16)*
+
+**Files:** `examples/LvglDemo/{LvglDemo.ino,lv_conf.h}`, scenarios; deps add `lvgl` 9.x.
+**Interfaces:** Uses M5Dial directly + `EncoderDetent`; not the app framework. `build.sh` adds `--build-property compiler.cpp.extra_flags=-DLV_CONF_INCLUDE_SIMPLE -I<sketch dir>` only when the sketch dir contains `lv_conf.h`. Display `lv_display_create(240,240)`, partial buffer 240×24 px, flush → `M5Dial.Display.pushImage`. Encoder indev (`LV_INDEV_TYPE_ENCODER`, diff from `EncoderDetent`, press from `BtnA`), pointer indev from `Touch.getDetail()`. UI: `lv_arc` 0–100 in an `lv_group`, centred value label, button toggles arc colour. Logs `lvgl: ready`, `lvgl: value=<n>`.
+- [ ] **Step 1: Failing scenario** `knob.test.yaml`: `lvgl: ready`; CW×5 → `lvgl: value=5`.
+- [ ] **Step 2:** Implement → PASS; all other sketches still compile (no `lv_conf.h` leakage). Device smoke `--expect 'lvgl: ready'`.
+- [ ] **Step 3: Commit** `feat(examples): LVGL 9 starter sketch`.
+
+---
+
+## Phase 3 — Wrap-up
+
+### Task 17: CI  *(issue 17)*
+
+**Files:** `.github/workflows/sketch.yml`.
+- [ ] **Step 1:** On push/PR touching `sketch/**`: setup arduino-cli (cache `~/.arduino15`), `setup.sh --ci`, `test_host.sh`, python unit tests, `build.sh` every sketch, build chips (wasi-sdk), run every `sim/scenarios/**/*.test.yaml` via `sim.sh` with `WOKWI_CLI_TOKEN` secret; CI copies `secrets.example.h` → `secrets.h`.
+- [ ] **Step 2:** Push → green. Scratch commit breaking one scenario → red; drop it.
+- [ ] **Step 3: Commit** `ci: build sketches, host tests, wokwi scenarios`.
+
+### Task 18: Documentation  *(issue 18)*
+
+**Files:** `sketch/docs/{SETUP.md,PORTING_NOTES.md,TEST_CHECKLIST.md}`, `sketch/README.md`, root `README.md` (one link line).
+- [ ] **Step 1:** Fresh-environment run of SETUP.md verbatim (temp `ARDUINO_DIRECTORIES_DATA` + new venv) → build, simulate, upload UserDemo; fix every deviation.
+- [ ] **Step 2:** PORTING_NOTES: spec §5.2 as built, original→M5Dial idiom table (e.g. `!btn.read()` loop → `BtnA.isPressed()` + `update()`), encoder detent/sign, sim fallback (if used), heap numbers, partition result, known differences.
+- [ ] **Step 3:** TEST_CHECKLIST = the Task 19 list, one section per sketch.
+- [ ] **Step 4: Commit** `docs(sketch): setup, porting notes, test checklist`.
+
+### Task 19: Human acceptance on the real device  *(issue 19 — the only task needing the owner)*
+
+Builder flashes each sketch, then walks the owner through `TEST_CHECKLIST.md`, recording results in the issue:
+- [ ] Launcher: icon ring looks like original; knob scroll smooth; **clockwise = next**; touch opens icon.
+- [ ] LCD, RTC, Brightness, TempDemo: visuals as original; backlight visibly changes; RTC shows correct local time.
+- [ ] Buzzer audible on RFID read and factory entry.
+- [ ] RFID: a real card/tag shows its UID.
+- [ ] Wi-Fi scan lists the home APs.
+- [ ] BLE: optional phone check with nRF Connect (automated Mac check already passed).
+- [ ] More → Power Off powers down; button wakes.
+- [ ] Factory test on bare device (IO = SKIP) and, once built, with the jig (LEDs follow pot, Port A device listed); RTC wake-up restarts device after ~4 s.
+- [ ] LvglDemo arc follows the knob.
+- [ ] Optional: `restore_flash.sh` round-trip to confirm the backup restores the original firmware.
+- [ ] Any defect → new issue; close epic when all ticked.
+
+### Task 20: Wokwi contribution package  *(issue 20 — submission itself is the owner's call)*
+
+**Files:** `sketch/sim/CONTRIBUTING-WOKWI.md`, `sketch/sim/chips/*/README.md` (final), `sketch/sim/board-m5dial/` (Wokwi board definition draft: `board.json` + `board.svg` with M5Dial pin map, if Wokwi's board format allows a custom board), `.github/workflows/wokwi-chips.yml`.
+- [ ] **Step 1:** Workflow builds every chip and attaches `<chip>-chip.zip` artefacts (template-compatible), so each chip can be used from a GitHub release by `wokwi.toml`/`diagram.json` like community chips.
+- [ ] **Step 2:** Per-chip README completed from what Tasks 2–3 learned: implemented registers/commands, controls, known gaps; one minimal example `diagram.json` per chip using only stock ESP32-S3 + that chip.
+- [ ] **Step 3:** `CONTRIBUTING-WOKWI.md`: how to split each chip into its own repo (`git subtree split --prefix sketch/sim/chips/<chip>`), Wokwi's community-chip / board submission routes and what each needs, licence statement (MIT).
+- [ ] **Step 4:** Owner reviews; any outward step (new public repos, PR/post to Wokwi) only on the owner's explicit go.
+- [ ] **Step 5: Commit** `chore(sim): package Wokwi chips for upstream contribution`.
+
+---
+
+## GitHub tracking (after plan approval; owner confirms list first)
+
+- Epic "Port UserDemo to Arduino sketches (M5Dial library)" with spec + plan links and the 20-item task list.
+- Issues 1–20 = Tasks 1–20. Labels: `arduino-port` + `infra` (1, 4, 5, 17), `sim` (2, 3, 20), `app` (6–16), `docs` (18), `human-needed` (19), `upstream` (20).
+- Repo `beyonddemise/M5Dial-UserDemo`. Dependencies: 2←1; 3←2; 4←3; 5←1; 6←4,5; 7–14←6; 15←6,11; 16←4; 17←3; 18←all of 1–17; 19←18; 20←3,17.
 
 ## Review (to be filled in after execution)

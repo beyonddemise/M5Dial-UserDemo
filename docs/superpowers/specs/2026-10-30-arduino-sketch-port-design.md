@@ -44,6 +44,11 @@ The primary goal is *working samples*; whether the owner later builds their own 
 | D4 | Factory test: **ported**, behind `ENABLE_FACTORY_TEST`; **IO jig step included** (LED strip + ADC + Port A I2C scan) and **skippable** so a bare device can complete the run. The owner will build the jig. |
 | D5 | Factory test results: **operator PASS/FAIL/SKIP per step + summary screen and serial log** before power-off; not persisted. |
 | D6 | Tracking: **Claude creates epic + issues on `beyonddemise/M5Dial-UserDemo`** (after confirmation); **one PR per issue** against `main`. |
+| D7 | **No compatibility layer.** Ported code calls the M5Dial library directly and uses its naming and idioms (`M5Dial.BtnA.wasPressed()`, `M5Dial.Encoder.read()`, `M5Dial.Touch.getDetail()`, `M5Dial.Rtc`, `M5Canvas`, `M5_LOGI`). Readers should not need to know the original firmware. Port behaviour, not names. |
+| D8 | **Simulated hardware tests from phase 1:** a **virtual M5Dial in Wokwi** (custom chips for the parts Wokwi lacks), so unmodified sketches run under `wokwi-cli` scenario tests locally and in CI. QEMU rejected (no GPIO/I2C/SPI emulation on ESP32-S3). |
+| D9 | **All human-only checks in one acceptance task near the end**; every earlier task is verified automatically (host tests, Wokwi scenarios, flash + serial on the attached device). |
+| D10 | Execution: **subagent-driven** (fresh implementer + reviewer per task). |
+| D11 | **Wokwi custom chips are kept and packaged for donation back to Wokwi** (self-contained, MIT, template layout, final contribution-package issue). |
 
 ## 4. Constraints
 
@@ -83,8 +88,9 @@ sketch/
       library.properties
       src/
         M5DialDemo.h            # umbrella include
-        hal/                    # thin HAL facade over M5Dial (keeps hal->display/encoder/... call shape)
-        mooncake/               # APP_BASE, GUI_Base
+        app_context.h           # what apps receive via setUserData(): the shared M5Canvas
+        encoder_detent.h        # raw M5Dial.Encoder counts → detent steps (only helper; no wrappers)
+        mooncake/               # APP_BASE, GUI_Base (app framework, not hardware)
         smooth_menu/            # ported as-is (MIT, keep LICENSE)
         apps/<app>/             # each app's logic + gui, reused by launcher and standalone sketches
         assets/                 # icon/image RGB565 headers + source PNGs
@@ -105,6 +111,10 @@ sketch/
     png2rgb565.py               # regenerate assets/*.h from PNGs
     build.sh / upload.sh / monitor.sh   # thin arduino-cli wrappers (replace flash.sh)
     gen-compile-commands.sh     # IntelliSense database for VSCode
+  sim/                          # virtual M5Dial for Wokwi (§5.7)
+    chips/<chip>/<chip>.chip.json + .chip.c   # custom chips, compiled to .chip.wasm
+    diagram.json                # ESP32-S3 + custom chips + stock parts on real M5Dial pins
+    scenarios/<sketch>/*.test.yaml            # wokwi-cli scenario tests per sketch
   .vscode/                      # tasks.json, settings.json, extensions.json, c_cpp_properties.json
 ```
 
@@ -112,20 +122,23 @@ Each standalone sketch is ~20 lines: `M5Dial.begin(...)`, construct the one app 
 library, run its lifecycle (`onSetup/onCreate/onRunning`) in `loop()`. The launcher sketch
 is the port of `main/main.cpp` (hold-button-at-boot → factory test, else launcher).
 
-### 5.2 Component mapping
+### 5.2 Component mapping (called directly — no wrappers, D7)
 
-| Original | Replacement |
+| Original | Replacement (M5Dial naming) |
 |---|---|
 | `LGFX_StampRing` + vendored LovyanGFX | `M5Dial.Display` (M5GFX autodetects the Dial); `LGFX_Sprite` → `M5Canvas` |
-| ESP32Encoder + `Button` on GPIO42 | `M5Dial.Encoder` + `M5Dial.BtnA` (wrapped to keep `encoder.getCount()` / `btn.read()` shape) |
-| FT3267 driver (`hal_tp.hpp`) | `M5Dial.Touch` (`getDetail()`); facade keeps `isTouched()/update()/getTouchPointBuffer()` |
-| PCF8563 driver (`hal_rtc.hpp`) | `M5Dial.Rtc` |
-| `hal/arduino/Tone.cpp`, LEDC copies | `M5Dial.Speaker.tone()` — whole `hal/arduino/` dropped |
+| ESP32Encoder `wasMoved()/getDirection()` | `M5Dial.Encoder.read()` (x4 counts) → `encoder_detent.h` turns counts into detent steps; positive step = M5Dial's natural sign, defined as **clockwise = next item** |
+| `Button` on GPIO42, `!btn.read()` loops | `M5Dial.BtnA.isPressed()/wasPressed()/wasReleased()/pressedFor(ms)`; every loop (incl. blocking waits) calls `M5Dial.update()` |
+| FT3267 driver (`hal_tp.hpp`) | `M5Dial.Touch.getDetail()` (`m5::touch_detail_t`: `x`, `y`, `isPressed()`, `wasClicked()`) |
+| PCF8563 driver (`hal_rtc.hpp`) | `M5Dial.Rtc` (`getDateTime()`, `setAlarmIRQ(sec)`, `clearIRQ()`, `disableIRQ()`) |
+| `hal/arduino/Tone.cpp`, LEDC copies | `M5Dial.Speaker.tone(freq, ms)` — whole `hal/arduino/` dropped |
 | GPIO46 power hold / power off | `M5Dial.Power` (`powerOff()`, `timerSleep()` for RTC wake-up) |
+| `HAL::HAL` object passed as user data | gone; apps call `M5Dial.*` and get the shared `M5Canvas` via `AppContext` |
+| `printf` / `_log` | `M5_LOGI/W/E` (M5Unified `M5.Log`) |
 | `esp-idf-rc522` component (event callbacks) | `M5Dial.Rfid` (MFRC522: `PICC_IsNewCardPresent/ReadCardSerial`), polled in `onRunning` |
 | `espressif/led_strip` (14 LEDs, GPIO2) | Adafruit_NeoPixel |
 | ADC oneshot + calibration (ADC1_CH0) | `analogReadMilliVolts(1)` |
-| NimBLE C heart-rate GATT server (`ble_demo.c`, `gatt_svr.c`) | NimBLE-Arduino, same services/UUIDs (HRS 0x180D, Device Info 0x180A) and same `ble_demo_get_infos()`-style status for the GUI |
+| NimBLE C heart-rate GATT server (`ble_demo.c`, `gatt_svr.c`) | NimBLE-Arduino, same services/UUIDs (HRS 0x180D, Device Info 0x180A), NimBLE-Arduino naming (`NimBLEServer`, callbacks) |
 | esp_wifi scan (`wifi_common_test.cpp`) | `WiFi.scanNetworks()` (async); keep the "AP count before records" fix intent from d49e20e |
 | efontCN fonts via CMake defines | M5GFX built-in `fonts::efontCN_24` / `fonts::efontCN_16_b` in `config.h` |
 | `wear_levelling` FAT mount | dropped (its init is commented out in the original) |
@@ -134,10 +147,11 @@ is the port of `main/main.cpp` (hold-button-at-boot → factory test, else launc
 
 ### 5.3 App framework
 
-Mooncake `APP_BASE`, `GUI_Base`, launcher, `smooth_menu` are plain C++ and are ported with
-minimal edits: include paths, `delay` macro removal (Arduino provides `delay`), HAL type changes.
-`std::string`/`std::vector` stay. The `VideoShit` class keeps its behaviour; renaming
-it to `TempDemo` in code is acceptable (display name unchanged).
+Mooncake `APP_BASE`, `GUI_Base`, launcher, `smooth_menu` are the app/UI framework (not hardware)
+and are kept. Hardware calls inside them are rewritten to the M5Dial API (D7); app behaviour is
+preserved. `std::string`/`std::vector` stay. The `VideoShit` class is renamed `TempDemo` in code
+(display name may stay). Apps get the shared `M5Canvas*` through `AppContext` passed with
+`setUserData()`.
 
 ### 5.4 LVGL demo (standalone)
 
@@ -163,55 +177,94 @@ RTC wake-up test. Results are **not persisted** (no NVS); they are lost on power
 
 ### 5.6 VSCode setup (content of `sketch/docs/SETUP.md`)
 
-1. Install VSCode + extensions: C/C++ (or clangd), Serial Monitor; `extensions.json` recommends them.
+1. Install VSCode + extensions: C/C++ (or clangd), Serial Monitor, Wokwi Simulator; `extensions.json` recommends them.
 2. Install arduino-cli (Homebrew / installer); `arduino-cli config init` or use repo `arduino-cli.yaml`.
 3. Add M5Stack board-manager URL; install the M5Stack ESP32 board package (pinned version).
 4. Install libraries (pinned): M5Dial, M5Unified, M5GFX, NimBLE-Arduino, Adafruit NeoPixel, lvgl (LvglDemo only).
 5. USB: driver notes (ESP32-S3 native USB/CDC), finding the port on macOS/Linux/Windows, WSL usbipd.
-6. VSCode tasks: Build / Upload / Monitor / Build+Upload+Monitor, with a sketch picker input.
+6. VSCode tasks: Build / Upload / Monitor / Build+Upload+Monitor / Simulate / Sim test, with a sketch picker input.
 7. IntelliSense: generate `compile_commands.json`, point C/C++ or clangd at it.
 8. Secrets: copy `secrets.example.h` → `secrets.h`.
-9. Troubleshooting: boot/download mode (hold button while plugging in), port busy, upload speed,
-   "library not found" (sketchbook path), out-of-memory at link time.
+9. Simulation: Wokwi account, `WOKWI_CLI_TOKEN`, wasi-sdk for building custom chips, running a sketch in the VSCode Wokwi panel.
+10. Troubleshooting: boot/download mode (hold button while plugging in), port busy, upload speed,
+   "library not found" (sketchbook path), out-of-memory at link time, simulator autodetect failures.
+
+### 5.7 Virtual M5Dial (Wokwi)
+
+A Wokwi project in `sketch/sim/` that M5Unified/M5GFX accept as an M5Dial, so **the same compiled
+firmware** that goes to the device runs in simulation.
+
+- **Stock parts:** `board-esp32-s3-devkitc-1`, KY-040 encoder on GPIO40/41, pushbutton on GPIO42,
+  buzzer on GPIO3, 14-pixel NeoPixel strip on GPIO2, potentiometer on GPIO1, Wokwi Wi-Fi (`Wokwi-GUEST`).
+- **Custom chips** (Wokwi Chips API, C → WASM): `gc9a01` (SPI display with framebuffer, answers the
+  ID reads M5GFX uses for autodetect), `ft3267` (I2C touch, touch point set via chip controls),
+  `pcf8563` (I2C RTC incl. alarm/IRQ registers), `ws1850s` (I2C MFRC522-compatible register
+  subset sufficient for REQA/anticollision/select; card UID + "card present" via controls).
+  Pins and I2C addresses copied from M5GFX/M5Unified board definitions for M5Dial, not from docs.
+- **Power hold (GPIO46)** is a no-op in sim; power-off/RTC wake-up ends the simulation (asserted).
+- **Fallback:** if autodetect cannot be satisfied, use M5Unified `cfg.fallback_board = board_M5Dial`
+  in a sim-only build flag. If neither works, stop and re-plan with the owner.
+- **Not simulated:** BLE (verified on the device), real touch feel, audio.
+- **Kept and donation-ready (owner decision D11):** the chips are first-class source, not test
+  scaffolding. Each is self-contained, generic to the real part, MIT-licensed, documented, and
+  follows the Wokwi chip template so it can be split into its own repo and contributed to Wokwi
+  (together with an M5Dial board/assembly definition if Wokwi's format allows). Publishing or
+  submitting anything externally happens only on the owner's go.
+- **Scenarios:** `wokwi-cli` YAML per sketch: wait for serial lines, turn encoder / press button /
+  set touch / present card via controls, assert serial output; screenshots compared against
+  committed golden images where the scenario format supports it.
 
 ## 6. Verification
 
+Three automated layers inside each task, one human layer at the end (D9).
+
+1. **Host unit tests** for Arduino-free logic (encoder detents, UID formatting, factory report,
+   png2rgb565, port detection).
+2. **Wokwi scenarios** on the virtual M5Dial: interaction (encoder, button, touch, RFID card,
+   Wi-Fi scan) and screenshots. Run locally and in CI (`WOKWI_CLI_TOKEN` repo secret).
+3. **Device smoke tests**, no human needed: the attached M5Dial (ESP32-S3 USB-JTAG/serial,
+   VID:PID `303A:1001`, port auto-detected) is flashed and its serial log checked for boot,
+   peripheral init and idle behaviour; BLE is verified from the Mac (Python `bleak`:
+   scan → connect → subscribe to 0x2A37 → receive notifications).
+4. **Human acceptance task (last-but-one issue):** everything only a person can judge —
+   screen vs original, knob/touch feel, clockwise = next, buzzer, real RFID card, factory test
+   with the jig, power off / wake. Collected in `TEST_CHECKLIST.md`; nothing earlier blocks on it.
+
 - Every sketch compiles via `tools/build.sh` with zero warnings introduced by our code.
-- A GitHub Actions workflow compiles all sketches on push/PR (arduino-cli, cached cores).
-- **Hardware in the loop:** an M5Dial is attached to the dev machine (ESP32-S3 native
-  USB-JTAG/serial, VID:PID `303A:1001`, currently `/dev/cu.usbmodem21101` — the port name can change
-  between plug-ins, so scripts take it as a parameter / auto-detect). The builder **flashes every
-  sketch and reads the serial log** as part of each issue's definition of done.
-- **Serial self-report:** every sketch logs boot, peripheral init results and key events
-  (encoder delta, button, touch x/y, RTC time, RFID UID, Wi-Fi AP count, BLE connect/subscribe)
-  at 115200 baud, so the builder can verify behaviour without seeing the screen.
-- **Owner-only checks** (things serial can't prove): what's on screen, knob/touch feel,
-  buzzer sound, presenting an RFID card, the IO jig. Listed per sketch in `TEST_CHECKLIST.md`;
-  the builder prompts the owner for these at the end of each issue.
 - **First flash overwrites the factory firmware.** Before it, the builder backs up the full
   8 MB flash with `esptool read_flash` (to a git-ignored `sketch/backup/`), so the device can be restored.
-- Behaviour reference = the original ESP-IDF firmware / the flash backup (side-by-side comparison).
+- Behaviour reference = the original ESP-IDF firmware / the flash backup.
+
+**Owner prerequisites before execution:** Wokwi account + `WOKWI_CLI_TOKEN` (local env and GitHub
+repo secret); macOS Bluetooth permission for the terminal (for the BLE test).
 
 ## 7. Proposed issue breakdown (one epic, ordered)
 
 **Workflow (owner decision):** after the plan is approved, Claude creates one epic plus the issues
 below on the fork **`beyonddemise/M5Dial-UserDemo`** — only after the owner confirms the final
-issue list. One branch + PR per issue against `main`; later issues build on merged earlier ones
-(an issue may be merged once it compiles and closed after the owner's on-device check).
+issue list. One branch + PR per issue against `main`; later issues build on merged earlier ones.
+An issue closes when its automated checks pass; human checks live in the acceptance issue.
 
-1. Toolchain & skeleton: `/sketch` layout, `arduino-cli.yaml`, tools scripts, VSCode tasks, SETUP.md draft, empty-sketch build.
-2. Shared library core: HAL facade over M5Dial, Mooncake base, GUI_Base, config/secrets.
-3. Assets + `png2rgb565.py` (byte-identical regeneration check vs existing headers).
-4. smooth_menu + Launcher shell (icons, encoder/touch navigation, open/close apps).
-5. LCD test · 6. RTC test · 7. Brightness · 8. Temp demo — each: library app + standalone sketch + launcher wiring.
-9. RFID test (MFRC522 API adaptation).
-10. Wi-Fi scan.
-11. BLE server (NimBLE-Arduino).
-12. More menu (Power Off / Quit) + power handling.
-13. Factory test incl. IO jig step, PASS/FAIL/SKIP verdicts, summary screen + FACTORY_TEST_JIG.md.
-14. LvglDemo standalone sketch.
-15. CI compile workflow.
-16. SETUP.md finalisation + TEST_CHECKLIST.md + PORTING_NOTES.md.
+Phase 1 — foundation and simulation
+1. Toolchain & skeleton, device tooling, flash backup.
+2. Virtual M5Dial spike: GC9A01 chip + diagram; M5Dial.begin() autodetects in sim (go/no-go).
+3. Virtual M5Dial completion: FT3267, PCF8563, WS1850S chips, encoder/button controls, scenario harness.
+4. Shared library core: AppContext, encoder detents, logging, Mooncake base, GUI_Base, config/secrets.
+5. Assets + `png2rgb565.py`.
+
+Phase 2 — port
+6. smooth_menu + Launcher + UserDemo sketch.
+7. LCD test · 8. RTC test · 9. Brightness · 10. Temp demo.
+11. RFID test. 12. Wi-Fi scan. 13. BLE server.
+14. More menu, power handling, memory soak, partition check.
+15. Factory test (jig step, verdicts, summary).
+16. LvglDemo.
+
+Phase 3 — wrap-up
+17. CI: host tests, compile, Wokwi scenarios.
+18. Docs: SETUP, PORTING_NOTES, TEST_CHECKLIST, FACTORY_TEST_JIG.
+19. Human acceptance on the real device.
+20. Wokwi contribution package (chip.zip builds, per-chip READMEs, split/submission guide; submission on owner's go).
 
 ## 8. Builder's calls (made in this design, not by the owner)
 
@@ -221,9 +274,12 @@ issue list. One branch + PR per issue against `main`; later issues build on merg
 - Original ESP-IDF tree left untouched.
 - Exact pinned versions of board package and libraries chosen at implementation time (latest stable, recorded in SETUP.md).
 - Factory test Wi-Fi/BLE steps stay disabled as in the original.
+- `encoder_detent.h` is the only shared helper over the M5Dial API (pure count→step math; the
+  M5Dial `ENCODER` exposes raw x4 counts only). Logging via M5Unified's `M5_LOGx`.
+- BLE verified from the Mac with `bleak` instead of a phone.
 
 ## 9. Left to the builder
 
-- Exact HAL facade API shape (as long as app code changes stay minimal).
 - Whether a custom partition table is needed (decide from binary size).
 - Visual design of the PASS/FAIL/SKIP prompt and summary screen (must fit the round 240×240 display).
+- Whether the stock KY-040 is scriptable enough in scenarios or the encoder also needs a custom chip.

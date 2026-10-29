@@ -9,3 +9,17 @@
   hardware-in-the-loop verification (flash + serial log) whenever a device is reachable,
   and leave only the truly human checks (visual, tactile, audio, external parts) to the owner.
 - **Also:** flashing overwrites what's on the device, so back up the flash before the first write.
+
+## 2026-10-30 — No compatibility shims that preserve legacy naming
+
+- **Mistake:** the plan wrapped the M5Dial library in a facade that kept the original
+  `hal->encoder.btn.read()` / `hal->tp` names to make porting easier.
+- **Rule:** when porting to a target library, write code in that library's idioms and naming
+  (`M5Dial.BtnA.wasPressed()`, `M5Dial.Encoder.read()`, `M5Canvas`). Readers won't know the
+  legacy codebase; a shim optimises for the porter, not the maintainer. Port semantics, not names.
+
+## 2026-10-30 — Batch human-only checks into one late task
+
+- **Rule:** keep automated verification (host tests, simulation, flash + serial) inside each
+  task; collect everything that needs a person (visual, tactile, cards, jig, phone) into a
+  single acceptance task near the end, so execution isn't blocked waiting on the owner.
