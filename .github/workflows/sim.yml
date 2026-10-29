@@ -1,0 +1,81 @@
+# Runs the Arduino port's Wokwi scenarios on the virtual M5Dial (sketch/sim).
+# Early subset of the full CI (Task 17 extends this: more sketches/scenarios,
+# host tests, build matrix). Each entry in the scenario matrix is
+# "<sketch-dir> <scenario.yaml>" relative to sketch/.
+name: sim
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['port/**']
+    paths:
+      - 'sketch/**'
+      - '.github/workflows/sim.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sim-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scenario:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Smoke-boot
+            sketch: examples/Smoke
+            scenario: sim/scenarios/Smoke/boot.test.yaml
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Cache toolchain
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            sketch/.arduino
+            sketch/tools/bin
+            sketch/tools/wasi-sdk
+            sketch/tools/.venv
+          key: sim-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('sketch/tools/deps.txt') }}
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
+        with:
+          version: 1.5.1
+
+      - name: Setup toolchain
+        run: sketch/tools/setup.sh
+
+      - name: Chip host tests
+        run: for m in sketch/sim/chips/*/Makefile; do make -C "$(dirname "$m")" test; done
+
+      - name: Run scenario
+        env:
+          WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
+          SKETCH: ${{ matrix.sketch }}
+          SCENARIO: ${{ matrix.scenario }}
+        working-directory: sketch
+        # why: Wokwi occasionally drops the session (transport error 1006); retry once.
+        # A real failure fails both attempts; the first attempt stays visible as a warning.
+        run: |
+          rc=0
+          tools/sim.sh "$SKETCH" "$SCENARIO" --timeout-ms 60000 || rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning::sim attempt 1 failed (exit $rc), retrying once"
+            tools/sim.sh "$SKETCH" "$SCENARIO" --timeout-ms 60000
+          fi
+
+      - name: Upload sim output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sim-${{ matrix.name }}
+          path: |
+            sketch/.build/sim-out/
+            sketch/sim/wokwi.toml
+          if-no-files-found: warn
