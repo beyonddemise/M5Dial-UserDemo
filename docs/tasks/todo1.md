@@ -215,7 +215,7 @@ Common rules for Tasks 6–16:
 **Interfaces:** Power Off → `M5Dial.Power.powerOff()` (log `power: off` first). `MemSoak`: own non-restarting driver — for each app: `new`, `setUserData(&ctx)`, `onSetup/onCreate`, loop `M5Dial.update(); onRunning()` until its done-condition, `onDestroy`, `delete` — programmatically runs WifiScan app (until its scan has completed — `wifi: ap_count=<n>` logged, **n may be 0** — or a 20 s timeout, which logs `soak: FAIL wifi timeout`, stops the soak and never emits `soak: done`), destroys it, BleServer app (5 s), destroys it, ×3; logs `heap: free=<n> min=<n>` after each; ends with `soak: done` only when every cycle succeeded (success-only signal); any failure logs `soak: FAIL <reason>` and stops.
 - [ ] **Step 1: Failing scenarios:** `more_menu_quit.test.yaml` (Quit → back to `launcher: ready`); `power_off.test.yaml` (`power: off` logged; sim end accepted).
 - [ ] **Step 2:** Port → PASS.
-- [ ] **Step 3: Soak (Review Focus 5):** `device_test.py examples/MemSoak --expect 'soak: done' --forbid 'boot: MemSoak.*boot: MemSoak' --forbid 'soak: FAIL' --timeout 180` → PASS (no reboot); record min heap in PORTING_NOTES.
+- [ ] **Step 3: Soak (Review Focus 5):** `device_test.py examples/MemSoak --expect 'heap: free=\d+ min=\d+' 'heap: free=\d+ min=\d+' 'heap: free=\d+ min=\d+' 'soak: done' --forbid 'boot: MemSoak.*boot: MemSoak' --forbid 'soak: FAIL' --timeout 180` → PASS (no reboot); record min heap in PORTING_NOTES.
 - [ ] **Step 4: Partition check:** UserDemo build size vs max; if > 90 %, add `UserDemo/partitions.csv` (4 MB app as original, no FAT) and note it; else record percentage.
 - [ ] **Step 5: Commit** `feat(apps): port More menu and power-off; memory soak`.
 
