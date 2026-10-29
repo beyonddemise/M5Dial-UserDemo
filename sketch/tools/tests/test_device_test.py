@@ -1,7 +1,11 @@
 """Unit tests for the pure log-matching logic of device_test.py."""
+import contextlib
+import io
 import os
 import sys
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import device_test  # noqa: E402
@@ -31,6 +35,39 @@ class EvaluateTest(unittest.TestCase):
 
     def test_forbid_absent_passes(self):
         self.assertEqual(device_test.evaluate(LOG, [], ["Guru Meditation"]), [])
+
+
+def _two_boards():
+    return [SimpleNamespace(device="/dev/ttyACM0", vid=0x303A, pid=0x1001),
+            SimpleNamespace(device="/dev/ttyACM1", vid=0x303A, pid=0x1001)]
+
+
+class AmbiguousPortTest(unittest.TestCase):
+    def test_ambiguous_ports_exit_3_before_upload(self):
+        err = io.StringIO()
+        with mock.patch("serial.tools.list_ports.comports", return_value=_two_boards()), \
+                mock.patch("subprocess.run") as run, contextlib.redirect_stderr(err):
+            self.assertEqual(device_test.main(["sk"]), 3)
+        run.assert_not_called()
+        self.assertIn("ambiguous", err.getvalue())
+
+    def test_explicit_port_bypasses_ambiguity(self):
+        with mock.patch("serial.tools.list_ports.comports", return_value=_two_boards()), \
+                mock.patch("subprocess.run") as run, \
+                mock.patch.object(device_test, "capture", return_value="ok") as cap, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(device_test.main(["sk", "--port", "/dev/ttyACM1"]), 0)
+        self.assertEqual(run.call_args[0][0][-1], "/dev/ttyACM1")
+        self.assertEqual(cap.call_args[0][0], "/dev/ttyACM1")
+
+    def test_ambiguity_after_reenumeration_exit_3(self):
+        one = _two_boards()[:1]
+        with mock.patch("serial.tools.list_ports.comports", side_effect=[one, _two_boards()]), \
+                mock.patch("subprocess.run"), mock.patch("time.sleep"), \
+                mock.patch.object(device_test, "capture") as cap, \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(device_test.main(["sk"]), 3)
+        cap.assert_not_called()
 
 
 if __name__ == "__main__":

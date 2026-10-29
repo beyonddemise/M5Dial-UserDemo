@@ -25,8 +25,6 @@ import find_port as fp
 
 TOOLS = Path(__file__).resolve().parent
 BAUD = 115200
-NO_DEVICE_MSG = ("no M5Dial found (VID:PID 303A:1001). Plug in, or hold the knob button "
-                 "while plugging in for download mode.")
 
 
 def evaluate(log: str, expects: List[str], forbids: List[str]) -> List[str]:
@@ -95,12 +93,14 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--forbid", nargs="+", default=[], metavar="REGEX")
     ap.add_argument("--timeout", type=float, default=20)
     ap.add_argument("--no-upload", action="store_true")
+    ap.add_argument("--port", help="explicit serial port (skips auto-detection)")
     args = ap.parse_args(argv)
 
-    port = fp.find_port(fp.DEFAULT_VIDPID)
-    if port is None:
-        print(NO_DEVICE_MSG, file=sys.stderr)
-        return 2
+    # why: never guess between boards -- upload overwrites flash
+    port, code, msg = (args.port, 0, "") if args.port else fp.resolve_port(fp.DEFAULT_VIDPID)
+    if code:
+        print(msg, file=sys.stderr)
+        return code
     if not args.no_upload:
         try:
             subprocess.run([str(TOOLS / "upload.sh"), args.sketch, port], check=True)
@@ -109,7 +109,12 @@ def main(argv: Optional[list] = None) -> int:
             return 1
         # why: the port node can change after the post-upload hard reset
         time.sleep(1.5)
-        port = fp.find_port(fp.DEFAULT_VIDPID) or port
+        if not args.port:
+            new_port, code, msg = fp.resolve_port(fp.DEFAULT_VIDPID)
+            if code == 3:
+                print(msg, file=sys.stderr)
+                return code
+            port = new_port or port
     try:
         log = capture(port, args.expect, stop_early=not args.forbid, timeout=args.timeout)
     except serial.SerialException as exc:
