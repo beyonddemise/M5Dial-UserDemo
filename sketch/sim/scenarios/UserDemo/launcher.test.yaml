@@ -99,6 +99,25 @@ steps:
   - wait-serial: 'app: close Set_Brightness'
   - wait-serial: 'launcher: ready'
 
+  # --- TempDemo: three detents to slot 6, open, one warmer step, quit
+  - set-control: { part-id: enc, control: steps, value: 3 }
+  - wait-serial: 'launcher: select 6 TempDemo'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open TempDemo'
+  - wait-serial: 'temp: target=22'
+  - wait-serial: 'temp: frame'
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'temp: target=23'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close TempDemo'
+  - wait-serial: 'launcher: ready'
+
   # --- touch an icon: selects it (icon 2 RfidTest at (149, 210), launcher_layout::ringPoint)
   - set-control: { part-id: touch, control: x, value: 149 }
   - set-control: { part-id: touch, control: y, value: 210 }
