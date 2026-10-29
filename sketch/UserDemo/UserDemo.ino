@@ -6,14 +6,13 @@
  * (ENABLE_FACTORY_TEST, config.h; not ported yet - logs `factory: not ported` and continues
  * with the launcher). Otherwise the launcher runs forever.
  *
- * Needs secrets.h: `cp secrets.example.h secrets.h` (git-ignored).
+ * Optional secrets.h (git-ignored, `cp secrets.example.h secrets.h`): Wi-Fi credentials for the
+ * factory test, picked up by M5DialDemo's config.h if present.
  * Scenario: sim/scenarios/UserDemo/launcher.test.yaml. Log lines: `boot: UserDemo`,
  * `launcher: ready`, `launcher: select <index> <name>`, `app: <name> not ported`.
  */
 #include <M5DialDemo.h>
 #include <apps/launcher/launcher.h>
-
-#include "secrets.h"
 
 // why: explicit prototypes - arduino-cli's prototype generator is unreliable on this setup
 // (it inserted calls inside setup() in DialProbe, see docs/PORTING_NOTES.md)

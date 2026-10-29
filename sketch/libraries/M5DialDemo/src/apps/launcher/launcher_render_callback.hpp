@@ -15,7 +15,6 @@
 #include "../../config.h"
 #include "../../assets/launcher_icons.h"
 #include "../../smooth_menu/simple_menu/simple_menu.h"
-#include <iostream>
 #include <array>
 #include <string>
 

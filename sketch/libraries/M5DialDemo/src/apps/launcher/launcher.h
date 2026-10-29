@@ -32,8 +32,8 @@ namespace MOONCAKE
             struct Data_t
             {
                 AppContext* ctx = nullptr;                    ///< host context (canvas)
-                SMOOTH_MENU::Simple_Menu* menu = nullptr;
-                LauncherRender_CB_t* menu_render_cb = nullptr;
+                SMOOTH_MENU::Simple_Menu* menu = nullptr;      ///< ring menu + selector animation (owned)
+                LauncherRender_CB_t* menu_render_cb = nullptr; ///< draws each menu frame (owned)
             };
         }
 

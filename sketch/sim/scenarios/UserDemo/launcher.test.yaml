@@ -13,9 +13,13 @@ steps:
   # --- boot with the button held > 1 s: factory-test entry check (ENABLE_FACTORY_TEST)
   # why held from t=0: UserDemo checks the button right after m5dd::begin; the factory test is
   # not ported yet, so it logs `factory: not ported` and continues with the launcher.
-  # The launcher starts with the button still down; releasing it must not open an app (the
-  # launcher opens on a press *edge*, wasPressed) - otherwise `app: LcdTest not ported` would
-  # come before the select line below (wait-serial cannot assert absence; see report).
+  # The launcher starts with the button still down; by design the release does not open an
+  # app (the launcher opens on a press *edge*, wasPressed). This scenario does NOT prove that:
+  # wait-serial cannot assert that a line is absent, and the later `app: LcdTest not ported`
+  # wait would match a stray one too.
+  # Plain boot (no hold -> `launcher: ready`, no `factory:` line) needs a second boot, i.e. a
+  # second Wokwi session; it is covered by the device smoke instead:
+  #   device_test.py UserDemo --expect 'boot: UserDemo' 'launcher: ready' --forbid 'factory:'
   - set-control: { part-id: btn, control: pressed, value: 1 }
   - wait-serial: 'boot: UserDemo'
   - wait-serial: 'factory: not ported'
