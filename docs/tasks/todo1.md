@@ -45,7 +45,7 @@
 sketch/
   README.md  arduino-cli.yaml  .gitignore
   docs/SETUP.md  PORTING_NOTES.md  TEST_CHECKLIST.md  FACTORY_TEST_JIG.md
-  tools/deps.txt setup.sh build.sh upload.sh monitor.sh find_port.py device_test.py
+  tools/deps.txt env.sh setup.sh build.sh upload.sh monitor.sh find_port.py device_test.py
         sim.sh backup_flash.sh restore_flash.sh gen_compile_commands.sh png2rgb565.py
         ble_check.py test_host.sh  tests/test_find_port.py  tests/test_png2rgb565.py
   sim/  wokwi.toml.in  diagram.json  chips/{gc9a01,ft3267,pcf8563,ws1850s}/  scenarios/<Sketch>/*.test.yaml  golden/
@@ -69,7 +69,7 @@ sketch/
 
 ### Task 1: Toolchain, skeleton, device tooling, flash backup  *(issue 1)*
 
-**Files:** `sketch/{arduino-cli.yaml,.gitignore,README.md}`, `sketch/tools/{deps.txt,setup.sh,build.sh,upload.sh,monitor.sh,find_port.py,device_test.py,backup_flash.sh,restore_flash.sh,gen_compile_commands.sh}`, `sketch/tools/tests/test_find_port.py`, `sketch/.vscode/*`, `sketch/docs/SETUP.md` (draft), `sketch/examples/Smoke/Smoke.ino` (deleted in Task 3).
+**Files:** `sketch/{arduino-cli.yaml,.gitignore,README.md}`, `sketch/tools/{deps.txt,env.sh,setup.sh,build.sh,upload.sh,monitor.sh,find_port.py,device_test.py,backup_flash.sh,restore_flash.sh,gen_compile_commands.sh}`, `sketch/tools/tests/test_find_port.py`, `sketch/.vscode/*`, `sketch/docs/SETUP.md` (draft), `sketch/examples/Smoke/Smoke.ino` (deleted in Task 3).
 
 **Interfaces — Produces:**
 - `find_port.py [--vidpid 303A:1001]` → prints port, exit 0; else exit 2 with `no M5Dial found (VID:PID 303A:1001). Plug in, or hold the knob button while plugging in for download mode.`
@@ -212,7 +212,7 @@ Common rules for Tasks 6–16:
 ### Task 14: More menu, power, memory soak, partitions  *(issue 14)*
 
 **Files:** `src/apps/more_menu/**` (drop the three LVGL entries + `lv_demos.h`), `examples/MemSoak/MemSoak.ino`, scenarios.
-**Interfaces:** Power Off → `M5Dial.Power.powerOff()` (log `power: off` first). `MemSoak`: own non-restarting driver — for each app: `new`, `setUserData(&ctx)`, `onSetup/onCreate`, loop `M5Dial.update(); onRunning()` until its done-condition, `onDestroy`, `delete` — programmatically runs WifiScan app (until `ap_count`), destroys it, BleServer app (5 s), destroys it, ×3; logs `heap: free=<n> min=<n>` after each; ends with `soak: done`.
+**Interfaces:** Power Off → `M5Dial.Power.powerOff()` (log `power: off` first). `MemSoak`: own non-restarting driver — for each app: `new`, `setUserData(&ctx)`, `onSetup/onCreate`, loop `M5Dial.update(); onRunning()` until its done-condition, `onDestroy`, `delete` — programmatically runs WifiScan app (until its scan has completed — `wifi: ap_count=<n>` logged, **n may be 0** — or a 20 s timeout, which logs `soak: wifi timeout` and fails the soak), destroys it, BleServer app (5 s), destroys it, ×3; logs `heap: free=<n> min=<n>` after each; ends with `soak: done`.
 - [ ] **Step 1: Failing scenarios:** `more_menu_quit.test.yaml` (Quit → back to `launcher: ready`); `power_off.test.yaml` (`power: off` logged; sim end accepted).
 - [ ] **Step 2:** Port → PASS.
 - [ ] **Step 3: Soak (Review Focus 5):** `device_test.py examples/MemSoak --expect 'soak: done' --forbid 'boot: MemSoak.*boot: MemSoak' --timeout 180` → PASS (no reboot); record min heap in PORTING_NOTES.
