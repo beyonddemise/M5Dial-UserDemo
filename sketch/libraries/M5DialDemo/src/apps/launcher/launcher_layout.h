@@ -8,6 +8,7 @@
  */
 #pragma once
 #include <cmath>
+#include <stdint.h>
 
 /** Launcher ring layout: positions of the menu slots / icons and touch hit tests. */
 namespace launcher_layout {
@@ -20,6 +21,18 @@ constexpr int ICON_RING_R = 95;   ///< radius of the icon ring (original 190 / 2
 constexpr int ICON_COUNT = 8;     ///< slots 0..7 carry an app icon; 8 and 9 stay empty
 constexpr int ICON_HIT_R = 22;    ///< touch radius of an icon (= drawn ICON_RADIUS)
 constexpr int CENTER_HIT_R = 50;  ///< touch radius of the centre "open" area
+
+/** Ring slot of each app (the launcher factory switch and the standalone sketches use these). */
+enum Slot : int {
+    SLOT_LCD_TEST = 0,
+    SLOT_RTC_TEST = 1,
+    SLOT_RFID_TEST = 2,
+    SLOT_BRIGHTNESS = 3,
+    SLOT_WIFI_SCAN = 4,
+    SLOT_BLE_SERVER = 5,
+    SLOT_TEMP_DEMO = 6,
+    SLOT_MORE_MENU = 7,
+};
 
 /** Integer screen point. */
 struct Point {
@@ -71,6 +84,18 @@ inline const char* appName(int slot) {
     static const char* const names[ICON_COUNT] = {"LcdTest",  "RtcTest",   "RfidTest", "Brightness",
                                                   "WifiScan", "BleServer", "TempDemo", "MoreMenu"};
     return (slot >= 0 && slot < ICON_COUNT) ? names[slot] : "-";
+}
+
+/**
+ * Icon / theme colour (RGB888) of the app behind slot `slot` (original icon_color_list).
+ * why here: the launcher and the standalone sketches (m5dd::initGui) must give an app the
+ * same background colour; one table keeps them in step.
+ * @return colour, or 0 (black) for an empty slot / out-of-range index
+ */
+inline uint32_t appColor(int slot) {
+    static const uint32_t colors[ICON_COUNT] = {0xFD5C4C, 0x577EFF, 0x03A964, 0x1AA198,
+                                                0xEB8429, 0x04A279, 0x008CD6, 0x5D7BA2};
+    return (slot >= 0 && slot < ICON_COUNT) ? colors[slot] : 0;
 }
 
 }  // namespace launcher_layout
