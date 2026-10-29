@@ -1,0 +1,28 @@
+# Single source of truth for every pinned dependency (sourced by shell scripts;
+# docs/SETUP.md quotes the same values). Never float versions: bump here only.
+# Format: KEY=value, no spaces around '='.
+
+# --- Arduino core + board ---------------------------------------------------
+M5DIAL_CORE=m5stack:esp32
+M5DIAL_CORE_VERSION=3.3.10
+M5DIAL_FQBN=m5stack:esp32:m5stack_dial
+
+# --- Arduino libraries (name@version, quoted: values contain spaces; lvgl is 9.x) ---------------------------
+LIB_M5DIAL="M5Dial@1.0.3"
+LIB_M5UNIFIED="M5Unified@0.2.28"
+LIB_M5GFX="M5GFX@0.2.35"
+LIB_NIMBLE="NimBLE-Arduino@2.5.2"
+LIB_NEOPIXEL="Adafruit NeoPixel@1.15.5"
+LIB_LVGL="lvgl@9.6.0"
+# Libraries Task 1 needs to compile Smoke (the rest are installed on demand
+# by later tasks; setup.sh installs them all, they are cheap).
+
+# --- Python venv (sketch/tools/.venv) ----------------------------------------
+PY_PYSERIAL=3.5
+PY_PILLOW=11.3.0
+PY_ESPTOOL=4.12.0
+PY_BLEAK=1.1.1
+
+# --- Simulation toolchain -----------------------------------------------------
+WOKWI_CLI_VERSION=0.29.1
+WASI_SDK_VERSION=34

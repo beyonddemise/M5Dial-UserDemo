@@ -1,0 +1,13 @@
+# Project-local toolchain and build output (all re-creatable by tools/setup.sh)
+.arduino/
+.build/
+backup/
+tools/.venv/
+tools/bin/
+tools/wasi-sdk/
+tools/__pycache__/
+tools/tests/__pycache__/
+# Wi-Fi credentials (secrets.example.h is committed)
+UserDemo/secrets.h
+# Simulator per-user output
+sim/wokwi.toml
