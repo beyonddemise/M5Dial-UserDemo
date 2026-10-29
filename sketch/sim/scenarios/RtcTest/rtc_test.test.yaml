@@ -1,0 +1,24 @@
+# RtcTest on the virtual M5Dial: open, the clock ticks at 1 Hz, quit - in ONE Wokwi session.
+# Run: tools/sim.sh examples/RtcTest sim/scenarios/RtcTest/rtc_test.test.yaml
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, rtc = pcf8563 (starts from the host's UTC
+# time, so the year is 20xx).
+name: 'RtcTest: clock and quit'
+version: 1
+steps:
+  - wait-serial: 'boot: RtcTest'
+  - wait-serial: 'app: open RTC_Test'
+
+  # --- two refreshes, one second apart
+  # why only the prefix: wait-serial matches a substring and cannot compare two lines; that
+  # the seconds increase is shown by the serial log artifact (and on the device), and the
+  # host test rtc_tick_due_after_period covers the 1 s refresh.
+  - wait-serial: 'rtc: 20'
+  - wait-serial: 'rtc: 20'
+
+  # --- button click quits (Review Focus 1: the release wait must call M5Dial.update())
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 300ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close RTC_Test'
+  - wait-serial: 'app: restart'
