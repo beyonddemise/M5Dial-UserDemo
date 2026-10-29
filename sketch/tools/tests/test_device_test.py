@@ -70,5 +70,45 @@ class AmbiguousPortTest(unittest.TestCase):
         cap.assert_not_called()
 
 
+class WaitForPortTest(unittest.TestCase):
+    def test_retries_until_port_reappears(self):
+        board = _two_boards()[:1]
+        sleeps = []
+        with mock.patch("serial.tools.list_ports.comports", side_effect=[[], [], board]):
+            port, code, _ = device_test.wait_for_port(
+                timeout=10, interval=0.25, sleep=sleeps.append, clock=lambda: 0.0)
+        self.assertEqual((port, code), ("/dev/ttyACM0", 0))
+        self.assertEqual(sleeps, [0.25, 0.25])
+
+    def test_gives_up_with_exit_2_after_timeout(self):
+        now = [0.0]
+
+        def sleep(d):
+            now[0] += d
+        with mock.patch("serial.tools.list_ports.comports", return_value=[]):
+            port, code, _ = device_test.wait_for_port(
+                timeout=1, interval=0.25, sleep=sleep, clock=lambda: now[0])
+        self.assertEqual((port, code), (None, 2))
+
+    def test_ambiguity_fails_immediately(self):
+        sleeps = []
+        with mock.patch("serial.tools.list_ports.comports", return_value=_two_boards()):
+            _, code, _ = device_test.wait_for_port(
+                timeout=10, interval=0.25, sleep=sleeps.append, clock=lambda: 0.0)
+        self.assertEqual(code, 3)
+        self.assertEqual(sleeps, [])
+
+    def test_main_missing_after_upload_exits_2_not_stale_port(self):
+        board = _two_boards()[:1]
+        with mock.patch("serial.tools.list_ports.comports", side_effect=[board, []]), \
+                mock.patch("subprocess.run"), mock.patch("time.sleep"), \
+                mock.patch.object(device_test, "wait_for_port",
+                                  wraps=lambda **k: (None, 2, "gone")), \
+                mock.patch.object(device_test, "capture") as cap, \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(device_test.main(["sk"]), 2)
+        cap.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

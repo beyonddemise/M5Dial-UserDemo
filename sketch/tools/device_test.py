@@ -85,6 +85,24 @@ def capture(port: str, expects: List[str], stop_early: bool, timeout: float) -> 
     return "".join(chunks)
 
 
+def wait_for_port(timeout: float = 10.0, interval: float = 0.25,
+                  sleep=time.sleep, clock=time.monotonic) -> tuple:
+    """Poll for the board's port until it appears (it re-enumerates after upload).
+
+    Ambiguity (exit 3) fails immediately; absence is retried until ``timeout``.
+
+    Returns:
+        ``(port, exit_code, message)`` as :func:`find_port.resolve_port`.
+    """
+    deadline = clock() + timeout
+    while True:
+        port, code, msg = fp.resolve_port(fp.DEFAULT_VIDPID)
+        # why: only "none found" (2) is transient; a port or ambiguity is final
+        if code != 2 or clock() >= deadline:
+            return port, code, msg
+        sleep(interval)
+
+
 def main(argv: Optional[list] = None) -> int:
     """CLI entry point."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -110,11 +128,10 @@ def main(argv: Optional[list] = None) -> int:
         # why: the port node can change after the post-upload hard reset
         time.sleep(1.5)
         if not args.port:
-            new_port, code, msg = fp.resolve_port(fp.DEFAULT_VIDPID)
-            if code == 3:
+            port, code, msg = wait_for_port()
+            if code:
                 print(msg, file=sys.stderr)
                 return code
-            port = new_port or port
     try:
         log = capture(port, args.expect, stop_early=not args.forbid, timeout=args.timeout)
     except serial.SerialException as exc:
