@@ -15,10 +15,10 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    wokwi-cli into `tools/bin/` and wasi-sdk into `tools/wasi-sdk/`, then installs the M5Stack
    core into the project-local `sketch/.arduino/` and the libraries into `sketch/libraries/`
    (git-ignored; `sketch/` is the Arduino sketchbook). It may `brew install` arduino-cli and,
-   on Apple Silicon without Rosetta, universal-ctags; those are global. Downloaded wokwi-cli and
+   on Apple Silicon, universal-ctags; those are global. Downloaded wokwi-cli and
    wasi-sdk are verified against the sha256 pins in deps.txt.
    Every tool script sources `tools/env.sh`, so no shell activation is needed afterwards.
-3. **Apple Silicon without Rosetta:** arduino-cli's bundled `ctags` is x86_64 (builds fail with
+3. **Apple Silicon (with or without Rosetta):** arduino-cli's bundled `ctags` is x86_64 (builds fail with
    `bad CPU type in executable`). setup.sh installs Homebrew `universal-ctags`, and
    `tools/env.sh` then makes `build.sh` / `gen_compile_commands.sh` pass
    `--build-property tools.ctags.path=sketch/tools/ctags`, selecting `tools/ctags/ctags`: a

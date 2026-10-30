@@ -1,7 +1,7 @@
 #!/bin/bash
 # tools/ctags/ctags - make universal-ctags look like arduino-cli's bundled ctags 5.8-arduino11.
 #
-# Selected per build, never installed into the toolchain: on Apple Silicon without Rosetta
+# Selected per build, never installed into the toolchain: on every Apple Silicon host
 # env.sh sets M5DIAL_CTAGS_DIR to this directory, and build.sh / gen_compile_commands.sh pass
 # `--build-property tools.ctags.path=$M5DIAL_CTAGS_DIR`, so arduino-cli runs this file as
 #   ctags -u --language-force=c++ -f - --c++-kinds=svpf --fields=KSTtzns

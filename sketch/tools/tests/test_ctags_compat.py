@@ -1,6 +1,7 @@
 """Regression tests for .ino prototype generation (tools/ctags/ctags + the real build).
 
-Background: on Apple Silicon without Rosetta, arduino-cli's bundled x86_64 ctags cannot run.
+Background: on Apple Silicon, arduino-cli's bundled x86_64 ctags cannot run (no Rosetta) or may be a
+stale raw-ctags symlink (older setup.sh runs).
 Raw universal-ctags made arduino-cli emit ``setup();`` call statements *inside* setup(),
 so the firmware recursed forever at boot. env.sh/build.sh now select the tools/ctags/ctags
 wrapper per build. These tests pin the wrapper's output format and check build.sh end to end.
@@ -114,6 +115,40 @@ class WrapperFormatTest(unittest.TestCase):
         self.assertEqual(res.returncode, 1)
         self.assertIn("not universal-ctags", res.stderr)
         self.assertEqual(res.stdout, "")
+
+
+class CtagsSelectionTest(unittest.TestCase):
+    """env.sh picks the wrapper on every Darwin-arm64 host, Rosetta or not; never on Linux."""
+
+    def _ctags_dir(self, uname_s, uname_m, rosetta):
+        """Source env.sh with PATH shims faking uname/arch; return M5DIAL_CTAGS_DIR."""
+        with tempfile.TemporaryDirectory() as shims:
+            for name, body in (
+                    ("uname", '[ "$1" = -s ] && echo %s || echo %s' % (uname_s, uname_m)),
+                    ("arch", "exit %d" % (0 if rosetta else 1))):
+                path = os.path.join(shims, name)
+                with open(path, "w") as f:
+                    f.write("#!/bin/sh\n" + body + "\n")
+                os.chmod(path, 0o755)
+            env = dict(os.environ, PATH=shims + os.pathsep + os.environ["PATH"])
+            res = subprocess.run(
+                ["bash", "-c", '. "$1" && printf %s "$M5DIAL_CTAGS_DIR"', "_",
+                 os.path.join(TOOLS, "env.sh")],
+                capture_output=True, text=True, env=env)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        return res.stdout
+
+    def test_darwin_arm64_without_rosetta(self):
+        self.assertEqual(self._ctags_dir("Darwin", "arm64", False), os.path.join(TOOLS, "ctags"))
+
+    def test_darwin_arm64_with_rosetta(self):
+        self.assertEqual(self._ctags_dir("Darwin", "arm64", True), os.path.join(TOOLS, "ctags"))
+
+    def test_linux_uses_bundled_ctags(self):
+        self.assertEqual(self._ctags_dir("Linux", "x86_64", False), "")
+
+    def test_darwin_x86_64_uses_bundled_ctags(self):
+        self.assertEqual(self._ctags_dir("Darwin", "x86_64", True), "")
 
 
 class SketchPrototypesTest(unittest.TestCase):
