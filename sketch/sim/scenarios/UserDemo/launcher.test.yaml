@@ -115,8 +115,24 @@ steps:
   - wait-serial: 'app: close WiFi_Scan'
   - wait-serial: 'launcher: ready'
 
-  # --- TempDemo: two detents to slot 6, open, one warmer step, quit
-  - set-control: { part-id: enc, control: steps, value: 2 }
+  # --- BLE_Server: one detent to slot 5, open, quit. Open/close only: Wokwi has no BLE, so
+  # nothing BLE-side (advertising, connect, notify) is checked here (docs/PORTING_NOTES.md)
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'launcher: select 5 BleServer'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open BLE_Server'
+  - delay: 500ms
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close BLE_Server'
+  - wait-serial: 'launcher: ready'
+
+  # --- TempDemo: one detent to slot 6, open, one warmer step, quit
+  - set-control: { part-id: enc, control: steps, value: 1 }
   - wait-serial: 'launcher: select 6 TempDemo'
   - set-control: { part-id: enc, control: steps, value: 0 }
   - set-control: { part-id: btn, control: pressed, value: 1 }
