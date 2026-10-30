@@ -215,14 +215,23 @@ external) and ties the RFID/touch RST inputs high.
 
 ### CI
 
-- **Triggers (Wokwi minutes are a monthly quota):**
-  - job `chips` (chip host tests, no Wokwi) runs on pushes to `port/**` that touch `sketch/sim/chips/**`;
-  - job `scenario` runs only on `workflow_dispatch` and on pull requests (opened, synchronize,
-    ready_for_review) that touch `sketch/sim/**`, `sketch/examples/**`, `sketch/libraries/M5DialDemo/**`,
-    `sketch/UserDemo/**` or the workflow, and only for same-repo PRs, so fork PRs never get `WOKWI_CLI_TOKEN`;
-  - on pull requests it is **opt-in**: it runs only while the PR carries the `sim` label (adding the
-    label starts a run); otherwise it is skipped, which passes branch protection. Since the first real
-    run (PR #38) a full run costs ~20 CI minutes, too much for every push;
+- **Two workflows:** the free checks are kept apart from the one that spends Wokwi quota.
+
+  | Workflow / job | What it runs | When | Wokwi quota |
+  | --- | --- | --- | --- |
+  | `sketch` / `chips` | chip host tests (`make test`, native cc) | every push to `main`/`port/**` and every PR touching `sketch/**`, plus `workflow_dispatch` | none |
+  | `sketch` / `host` | `tools/test_host.sh` (clang++) | same | none |
+  | `sketch` / `build` | `setup.sh`, Python tool tests, chip wasm builds, `tools/build_all.sh` (UserDemo + every `examples/*`, flash use in the step summary) | same | none |
+  | `sim` / `scenario` | quota gate (chip host tests + `test_sim_ci.py`), then every `sim/scenarios/**/*.test.yaml` via `tools/sim_ci.sh` | only `workflow_dispatch` and same-repo PRs touching `sketch/sim/**`, `sketch/examples/**`, `sketch/libraries/M5DialDemo/**`, `sketch/UserDemo/**` or `sim.yml`, and on PRs only while the PR carries the `sim` label; never on push | yes |
+
+  - Fork PRs never get `WOKWI_CLI_TOKEN`; their scenario job is skipped.
+  - `scenario` is **opt-in** on pull requests: adding the `sim` label starts a run; without it the
+    job is skipped, which passes branch protection. Since the first real run (PR #38) a full run
+    costs ~20 CI minutes, too much for every push.
+  - A used-up quota marks the remaining scenarios SKIPPED (warning + step summary) instead of failing.
+  - `build_all.sh` builds every sketch even after a failure, and the step fails if any failed.
+  - No `secrets.h` copy: `config.h` includes it only via `__has_include`.
+  - Both workflows share one toolchain cache entry, keyed on `deps.txt` + `setup.sh`.
   - `concurrency` per ref with cancel-in-progress, so a newer commit stops the older run.
 - **One Wokwi session per sketch:** DialProbe's checks (init, RTC, button, touch, encoder, RFID) are
   the steps of one scenario, `sim/scenarios/DialProbe/probe.test.yaml`. The loop runs every
