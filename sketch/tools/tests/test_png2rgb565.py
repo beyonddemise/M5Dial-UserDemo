@@ -36,7 +36,7 @@ class Png2Rgb565Test(unittest.TestCase):
                 text = open(hdr, encoding="utf-8").read()
                 self.assertEqual(text.count("#pragma once"), 1)
                 name = os.path.basename(hdr)[:-2]
-                m = re.search(r"^// Regenerable: (.+)$", text, re.M)
+                m = re.search(r"^// Regenerable \(from repo root\): (.+)$", text, re.M)
                 self.assertIsNotNone(m)
                 parts = m.group(1).split()
                 self.assertEqual(parts[0], "python3")
