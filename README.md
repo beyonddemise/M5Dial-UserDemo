@@ -3,6 +3,8 @@
 
 M5Dial user demo for hardware evaluation.
 
+Arduino-sketch port (arduino-cli, VSCode, Wokwi): see [sketch/README.md](sketch/README.md).
+
 ### Tool Chains
 
 [ESP-IDF v5.1.3](https://docs.espressif.com/projects/esp-idf/en/v5.1.3/esp32s3/index.html)
