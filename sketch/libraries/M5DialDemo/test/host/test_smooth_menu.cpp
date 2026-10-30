@@ -53,3 +53,18 @@ HOST_TEST(menu_go_to_item_selects_touched_icon) {
     m.menu.getCamera()->goToItem(2);
     HT_EQ(2, m.target());
 }
+
+#include <cstring>
+#include <new>
+
+// why: Simple_Menu::init() news its Anim_Path members and the first update() calls getValue()
+// before any resetTime(), so the constructor must set _time_offset (PR #31 review). Building it
+// in junk-filled storage makes an uninitialised offset show up deterministically.
+HOST_TEST(anim_path_starts_with_zero_time_offset) {
+    alignas(LVGL::Anim_Path) unsigned char buf[sizeof(LVGL::Anim_Path)];
+    std::memset(buf, 0x5A, sizeof(buf));
+    auto* p = new (buf) LVGL::Anim_Path();
+    p->getValue(1000);
+    HT_EQ(1000, (int)p->getAnimValue()->act_time);
+    p->~Anim_Path();
+}

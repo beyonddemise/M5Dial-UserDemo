@@ -70,6 +70,8 @@ namespace LVGL {
                 _anim_t.end_value = 0;
                 _anim_t.time = 0;
                 _anim_t.act_time = 0;
+                // why: getValue() can run before any resetTime() (first Simple_Menu::update)
+                _time_offset = 0;
             }
             ~Anim_Path() = default;
 
