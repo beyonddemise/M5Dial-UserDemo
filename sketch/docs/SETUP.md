@@ -5,7 +5,7 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
 
 | Item | Pin |
 |---|---|
-| Core | `m5stack:esp32` 3.3.10 (FQBN `m5stack:esp32:m5stack_dial`, options `CDCOnBoot=cdc` so serial logs reach USB, `FlashSize=8M,PartitionScheme=huge_app` for a 3 MB app, no OTA) |
+| Core | `m5stack:esp32` 3.3.10 (FQBN `m5stack:esp32:m5stack_dial`, options `CDCOnBoot=cdc` so serial logs reach USB, `FlashSize=8M,PartitionScheme=huge_app` for a 3 MB app, no OTA; UserDemo overrides the table with its own `UserDemo/partitions.csv`: 4 MB app, no OTA, no FAT, same 8 MB flash) |
 | Libraries | M5Dial 1.0.3, M5Unified 0.2.28, M5GFX 0.2.35, NimBLE-Arduino 2.5.2, Adafruit NeoPixel 1.15.5, lvgl 9.6.0 |
 | Python (venv) | pyserial 3.5, pillow 11.3.0, esptool 4.12.0, bleak 1.1.1 |
 | Simulation | wokwi-cli 0.29.1, wasi-sdk 34 |

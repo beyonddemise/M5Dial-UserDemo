@@ -72,6 +72,7 @@ void WiFi_Scan::_poll_scan()
         // why the count first (upstream fix d49e20e): it bounds the SSID(i)/RSSI(i) reads; the
         // core's scan-done handler already read the AP count before the records
         M5_LOGI("wifi: ap_count=%d", result);
+        _data.scan_done = true;
         int listed = wifi_list::listedCount(result);
         _data.wifi_scan_result.clear();
         for (int i = 0; i < listed; i++)

@@ -511,3 +511,83 @@ with `<Class>` = `setAppName()` = the C++ class name.
   ESP32-S3 the NimBLE host comes precompiled with the core, and the core's `sdkconfig.h` sets
   all four `CONFIG_BT_NIMBLE_ROLE_*` to 1 before NimBLE-Arduino's
   `CONFIG_BT_NIMBLE_ROLE_*_DISABLED` options are checked (tried: same binary size to the byte).
+
+## More menu, memory soak, partitions, Task 14
+
+### More menu / power-off (`MoreMenu`)
+
+| Original (`_data.hal->...`)                              | Port                                                          |
+|----------------------------------------------------------|---------------------------------------------------------------|
+| `HAL::HAL*` user data                                    | `AppContext*` (`getUserData()`)                               |
+| 16 entries: Quit, Power Off, LVGL Widgets / Benchmark / Stress, 11 filler rows | 13 entries: the three LVGL rows and `lv_demos.h` / `_callback_lvgl` are dropped (LVGL lives only in the standalone LvglDemo sketch, D3); list and row geometry in `more_menu_items.h` (host-tested) |
+| `encoder.wasMoved(true)` + `getDirection() < 1` -> `goNext()` | `m5dd::readDetentsWithClick()`, one `goNext()` / `goLast()` per detent, clockwise = next (Review Focus 3); logs `more: select <i> <tag>` |
+| `!encoder.btn.read()` + hold loop, then wait for the selector anim | `M5Dial.BtnA.wasPressed()` (edge), hold loop with `M5Dial.update()`, then the same anim wait |
+| `approxSin` row curve, `255 - abs(dy) * 2` text grey in a `uint8_t` | same maths (`more_menu_items::curveOffsetX / textShade`); the grey is clamped at 0 (upstream converted negative floats to `uint8_t`, undefined behaviour) |
+| `fillSmoothRoundRectInDifference` (a method the original added to its vendored LovyanGFX) | `_invert_round_rect()` in the render callback: inside the rounded rect, black pixels become the selector orange and all others black, as upstream; exact mask (`more_menu_items::inRoundRect`), without upstream's anti-aliased corner edge |
+| "Quit" -> `destroyApp()`                                 | same; logs `more: selected Quit`, then `app: close MoreMenu`  |
+| "Power Off": black screen, `rtc.clearIRQ()` + `disableIRQ()`, `delay(500)`, `hal->powerOff()`, `delay(4000)`, `hal->powerOn()` | logs `power: off` + `Serial.flush()` first, then black screen, `M5Dial.Rtc.clearIRQ()` + `disableIRQ()`, `delay(500)`, `M5Dial.Power.powerOff()` |
+
+- **No `powerOn()` fallback:** M5Unified's `powerOff()` pulses the hold pin (GPIO46) low and then
+  calls `esp_deep_sleep_start()`, so it never returns. Upstream's HAL only released the hold pin,
+  so on USB power the chip kept running and re-took the hold pin after 4 s. On USB power the port stays in deep sleep instead; the
+  physical check is in Task 19.
+- **Launcher slot 7** now opens `MoreMenu`; the launcher keeps the black (not icon-coloured)
+  open/close animation for it, as upstream.
+- **Scenarios:** `sim/scenarios/UserDemo/more_menu_quit.test.yaml` (Quit -> `app: close
+  MoreMenu` -> `launcher: ready`) and `power_off.test.yaml` (`power: off`; the sim ending there is
+  accepted). Each is its own Wokwi session, because a power-off ends the boot. Both are written
+  but have **not been run yet**: the Wokwi CI quota was used up when Task 14 was done.
+
+### Memory soak (`examples/MemSoak`, Review Focus 5)
+
+- **Driver:** MemSoak has its own non-restarting loop instead of `m5dd::runStandalone()`, which
+  restarts the chip when the app closes and so would reset the heap being measured. Per app it
+  does `new (std::nothrow)`, `m5dd::initGui()`, `setUserData(&ctx)`, `onSetup()`, `onCreate()`,
+  then `M5Dial.update(); onRunning()` until the done condition, then `onDestroy()` and `delete`.
+- **Sequence:** `mem_soak::Sequencer` (`src/mem_soak.h`, host-tested in `test_mem_soak.cpp`).
+  Each cycle runs WiFi_Scan until its scan has completed (n = 0 APs counts) or 20 s pass, then
+  BLE_Server for 5 s. The phase clock starts after `onCreate()`, so NimBLE start-up does not use
+  up the 5 s. Three cycles in all, each followed by `heap: free=<n> min=<n>` (internal heap: now,
+  and the lowest since boot).
+- **Verdict:** `soak: done` is logged only after three good cycles. Any failure logs
+  `soak: FAIL <reason>` and stops, and the sketch then idles without restarting. The reasons are
+  `wifi timeout`, `wifi quit` / `ble quit` (the app closed itself, e.g. after a button click),
+  and `alloc wifi` / `alloc ble`. Failures are sticky, and a scan that completes in the same frame
+  as the timeout or a click still counts as done.
+- **Done seam:** `WiFi_Scan::scanDone()`. It returns true from the frame that logged
+  `wifi: ap_count=<n>`, and is the only addition to the Wi-Fi app. A failed scan never sets it,
+  so it shows up as `wifi timeout` after 20 s.
+- **Device-only:** Wokwi has no BLE, so there is no scenario. The check (not run yet, because the
+  device was offline):
+  `tools/device_test.py examples/MemSoak --expect 'heap: free=\d+ min=\d+' 'heap: free=\d+ min=\d+' 'heap: free=\d+ min=\d+' 'soak: done' --forbid 'boot: MemSoak.*boot: MemSoak' --forbid 'soak: FAIL' --timeout 180`.
+- **Min heap:** *pending the device run*. Record the three `heap:` lines and the final `min=`
+  here once it has passed.
+- MemSoak builds at 2,222,499 B (70 % of the 3 MB `huge_app` app partition).
+
+### Partition table (Task 14)
+
+With the More menu, UserDemo measured 2,833,983 B, which is 90.1 % of the 3 MB `huge_app` app
+partition (the limit is 90 %). So `UserDemo/partitions.csv` now gives UserDemo one 4 MB app, as
+the original firmware (`/partitions.csv`: `factory` 4M). There is no OTA and no FAT/SPIFFS,
+because the port stores no files.
+
+| Name     | Type | SubType  | Offset   | Size     |
+|----------|------|----------|----------|----------|
+| nvs      | data | nvs      | 0x9000   | 0x5000   |
+| otadata  | data | ota      | 0xe000   | 0x2000   |
+| app0     | app  | ota_0    | 0x10000  | 0x400000 |
+| coredump | data | coredump | 0x410000 | 0x10000  |
+
+- **Why not the original table as-is:** the original table has `nvs` at 0x9000 with 0x6000 bytes
+  and `phy_init` at 0xf000. Every Arduino upload writes `boot_app0.bin` to 0xe000, which would
+  overwrite both. So the layout follows the core's `huge_app.csv` (otadata at 0xe000, `app0` as
+  `ota_0`, coredump), with `app0` grown to 4 MB. 0x420000-0x800000 stays unused.
+- **How it is picked up:** the core's prebuild hook copies `<sketch>/partitions.csv` over the
+  menu's table. The examples have none and keep `huge_app`. arduino-cli still checks the size
+  against the menu's `upload.maximum_size` (3 MB), so `tools/build.sh` reads the first app
+  partition of a sketch's `partitions.csv` and passes it as
+  `--build-property upload.maximum_size=<bytes>` (tested in `tools/tests/test_build_partitions.py`).
+- **Result:** UserDemo is 2,833,983 B, 67 % of 4,194,304 B. The flash settings stay 8 MB
+  (`FlashSize=8M` in `tools/deps.txt`, `--flash-size 8MB` in the build's `flash_args`), and
+  `gen_esp32part.py` decodes the built `UserDemo.ino.partitions.bin` to the table above. The
+  flash backup and restore tools always handle the whole 8 MB chip, whatever the table.
