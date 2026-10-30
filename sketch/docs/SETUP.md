@@ -66,7 +66,7 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
      (`tools/sim.sh <sketch> --prepare-only`), then starts the Wokwi panel on `sim/wokwi.toml`
      (select that file once with "Wokwi: Select Config File").
    - VSCode task **Sim test**: pick a sketch and a scenario; runs `tools/sim.sh <sketch> <scenario>`.
-     The pick-list has one scenario per sketch; run the other UserDemo scenarios from the command line.
+     The pick-list offers every scenario under `sim/scenarios/`; add new ones there too.
    - Command line: `sketch/tools/sim.sh sketch/examples/DialProbe sketch/sim/scenarios/DialProbe/probe.test.yaml`.
    - The free Wokwi plan has a monthly CI-minute quota; every scenario run (local or CI) counts against it.
      CI therefore runs scenarios only on manual dispatch and on same-repo pull requests labelled `sim`
