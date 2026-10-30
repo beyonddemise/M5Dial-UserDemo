@@ -2,6 +2,9 @@
 # docs/SETUP.md quotes the same values). Never float versions: bump here only.
 # Format: KEY=value, no spaces around '='.
 
+# --- arduino-cli (CI installs this version; locally setup.sh uses the one on PATH) ---
+ARDUINO_CLI_VERSION=1.5.1
+
 # --- Arduino core + board ---------------------------------------------------
 M5DIAL_CORE=m5stack:esp32
 M5DIAL_CORE_VERSION=3.3.10

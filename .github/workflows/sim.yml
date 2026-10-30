@@ -1,0 +1,88 @@
+# Runs the Arduino port's Wokwi scenarios on the virtual M5Dial (sketch/sim).
+# Early subset of the full CI (Task 17 extends this: more sketches/scenarios,
+# host tests, build matrix). Each entry in the scenario matrix is
+# "<sketch-dir> <scenario.yaml>" relative to sketch/.
+name: sim
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['port/**']
+    paths:
+      - 'sketch/**'
+      - '.github/workflows/sim.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sim-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scenario:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Smoke-boot
+            sketch: examples/Smoke
+            scenario: sim/scenarios/Smoke/boot.test.yaml
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Read pinned versions
+        id: deps
+        # why: sketch/tools/deps.txt is the single source of truth for versions
+        run: |
+          . sketch/tools/deps.txt
+          echo "arduino_cli=$ARDUINO_CLI_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Cache toolchain
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            sketch/.arduino
+            sketch/tools/bin
+            sketch/tools/wasi-sdk
+            sketch/tools/.venv
+          key: sim-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('sketch/tools/deps.txt', 'sketch/tools/setup.sh') }}
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
+        with:
+          version: ${{ steps.deps.outputs.arduino_cli }}
+
+      - name: Setup toolchain
+        run: sketch/tools/setup.sh
+
+      - name: Chip host tests
+        run: for m in sketch/sim/chips/*/Makefile; do make -C "$(dirname "$m")" test; done
+
+      - name: Tool unit tests
+        # why: covers sim_ci.sh retry/quota verdicts, which the scenario step cannot when Wokwi is unavailable
+        run: sketch/tools/.venv/bin/python -m unittest discover sketch/tools/tests
+
+      - name: Run scenario
+        env:
+          WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
+          SKETCH: ${{ matrix.sketch }}
+          SCENARIO: ${{ matrix.scenario }}
+        working-directory: sketch
+        # why: tools/sim_ci.sh holds the verdict logic (unit-tested in tools/tests/test_sim_ci.py):
+        # a Wokwi transport drop (code 1006) is retried once; a used-up Wokwi CI minute quota is a
+        # billing condition, not a test result, so the scenario is reported as SKIPPED (warning +
+        # step summary) and the job stays green; any other failure fails the job.
+        run: tools/sim_ci.sh --timeout-ms 60000 "$SKETCH" "$SCENARIO"
+
+      - name: Upload sim output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sim-${{ matrix.name }}
+          path: |
+            sketch/.build/sim-out/
+            sketch/sim/wokwi.toml
+          if-no-files-found: warn

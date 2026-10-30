@@ -10,6 +10,9 @@ set -euo pipefail
 "$TOOLS_DIR/check_backup.sh" "$SKETCH_ROOT/backup" || exit 3
 dir="$(cd "$1" && pwd)"; name="$(basename "$dir")"
 port="${2:-$("$PY" "$TOOLS_DIR/find_port.py")}"
-"$TOOLS_DIR/build.sh" "$dir"
+# why: an inherited M5DIAL_BUILD_DIR (e.g. the -DM5DD_SIM build from sim.sh) must never be
+# flashed to hardware; build and upload from the same, explicit device build dir.
+build_dir="$SKETCH_ROOT/.build/$name"
+M5DIAL_BUILD_DIR="$build_dir" "$TOOLS_DIR/build.sh" "$dir"
 exec arduino-cli upload --config-file "$ARDUINO_CLI_CONFIG" --fqbn "$M5DIAL_FQBN_FULL" \
-  --port "$port" --input-dir "$SKETCH_ROOT/.build/$name"
+  --port "$port" --input-dir "$build_dir"
