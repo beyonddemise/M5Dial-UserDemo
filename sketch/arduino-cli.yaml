@@ -1,0 +1,6 @@
+# Project-local arduino-cli config. Directories (cores, libraries, downloads) are
+# NOT set here because arduino-cli resolves relative paths against the current
+# directory; tools/env.sh exports absolute ARDUINO_DIRECTORIES_* instead.
+board_manager:
+  additional_urls:
+    - https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/package_m5stack_index.json

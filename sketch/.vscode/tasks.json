@@ -1,0 +1,30 @@
+{
+  // Sketch-folder tasks. ${input:sketch} offers every sketch directory.
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "Build", "type": "shell", "group": "build",
+      "command": "\"${workspaceFolder}/tools/build.sh\" '${input:sketch}'", "problemMatcher": ["$gcc"] },
+    { "label": "Upload", "type": "shell",
+      "command": "\"${workspaceFolder}/tools/upload.sh\" '${input:sketch}'", "problemMatcher": [] },
+    { "label": "Monitor", "type": "shell", "isBackground": true,
+      "command": "\"${workspaceFolder}/tools/monitor.sh\"", "problemMatcher": [] },
+    { "label": "Build+Upload+Monitor", "dependsOrder": "sequence",
+      "dependsOn": ["Upload", "Monitor"], "problemMatcher": [] },
+    { "label": "Device test", "type": "shell",
+      "command": "\"${workspaceFolder}/tools/.venv/bin/python\" \"${workspaceFolder}/tools/device_test.py\" '${input:sketch}' --expect '${input:expect}'",
+      "problemMatcher": [] },
+    { "label": "Host tests", "type": "shell",
+      "command": "\"${workspaceFolder}/tools/.venv/bin/python\" -m unittest discover \"${workspaceFolder}/tools/tests\"",
+      "problemMatcher": [] }
+  ],
+  "inputs": [
+    { "id": "sketch", "type": "pickString", "description": "Sketch to use",
+      "options": ["UserDemo", "examples/Smoke", "examples/DialProbe", "examples/LcdTest",
+                  "examples/RtcTest", "examples/RfidTest", "examples/Brightness",
+                  "examples/TempDemo", "examples/WifiScan", "examples/BleServer",
+                  "examples/MemSoak", "examples/LvglDemo"],
+      "default": "examples/Smoke" },
+    { "id": "expect", "type": "promptString", "description": "Regex expected in the serial log",
+      "default": "boot: " }
+  ]
+}

@@ -1,0 +1,17 @@
+# Project-local toolchain and build output (all re-creatable by tools/setup.sh)
+.arduino/
+# sketch/ is the Arduino sketchbook: arduino-cli installs third-party libraries into
+# libraries/. Ignore all of them; only our own M5DialDemo (Task 4) is tracked.
+libraries/*
+!libraries/M5DialDemo/
+.build/
+backup/
+tools/.venv/
+tools/bin/
+tools/wasi-sdk/
+tools/__pycache__/
+tools/tests/__pycache__/
+# Wi-Fi credentials (secrets.example.h is committed)
+UserDemo/secrets.h
+# Simulator per-user output
+sim/wokwi.toml
