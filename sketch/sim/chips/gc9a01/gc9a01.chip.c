@@ -422,6 +422,7 @@ static void on_pin(void *user_data, pin_t pin, uint32_t value) {
 /** Wokwi entry point: read attributes, set up pins, SPI device and framebuffer. */
 void chip_init(void) {
   chip_t *c = calloc(1, sizeof(chip_t));
+  if (!c) { printf("gc9a01: out of memory (%u bytes)\n", (unsigned)sizeof(chip_t)); return; }
   c->ips = attr_read(attr_init("ips", 1)) != 0;
   c->glass_bgr = attr_read(attr_init("bgr", 1)) != 0;
   c->dummy_bits = attr_read(attr_init("readDummyBits", 1));

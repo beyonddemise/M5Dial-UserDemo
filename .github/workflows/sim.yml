@@ -61,6 +61,10 @@ jobs:
       - name: Chip host tests
         run: for m in sketch/sim/chips/*/Makefile; do make -C "$(dirname "$m")" test; done
 
+      - name: Tool unit tests
+        # why: covers sim_ci.sh retry/quota verdicts, which the scenario step cannot when Wokwi is unavailable
+        run: sketch/tools/.venv/bin/python -m unittest discover sketch/tools/tests
+
       - name: Run scenario
         env:
           WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
