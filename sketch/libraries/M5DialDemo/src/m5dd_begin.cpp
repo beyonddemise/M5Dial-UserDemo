@@ -33,29 +33,22 @@ bool probe_rfid() {
 }
 
 /**
- * PCD_Init() with a bounded soft reset: rfidSoftReset() replaces PCD_Reset(), then the same
- * timer/ASK/CRC register setup and antenna-on as M5Dial 1.0.3's MFRC522::PCD_Init().
- * @return false if the reader never left power-down (it is then treated as missing)
+ * Initialises the reader like PCD_Init(), but through M5.In_I2C so every transfer is checked
+ * and the soft reset is bounded (rfidInit(), rfid_reset.h).
+ * @return false if any transfer failed or the reader never left power-down (treated as missing)
  *
- * why not M5Dial.Rfid.begin(): PCD_Init() calls PCD_Reset(), which spins forever on the
- * PowerDown bit; a VersionReg answer does not prove the reset will complete.
+ * why not M5Dial.Rfid.begin(): PCD_Init() spins forever on the PowerDown bit and ignores I2C
+ * errors; a VersionReg answer proves neither that the reset completes nor that setup succeeded.
  */
 bool init_rfid() {
-    MFRC522& r = M5Dial.Rfid;
-    if (!rfidSoftReset([&](uint8_t reg, uint8_t v) { r.PCD_WriteRegister(reg, v); },
-                       [&](uint8_t reg) { return r.PCD_ReadRegister(reg); },
-                       [] { return (uint32_t)millis(); }, [](uint32_t ms) { delay(ms); },
-                       RFID_RESET_TIMEOUT_MS)) {
-        return false;
-    }
-    r.PCD_WriteRegister(MFRC522::TModeReg, 0x80);       // timer starts after each transmission
-    r.PCD_WriteRegister(MFRC522::TPrescalerReg, 0xA9);  // 40 kHz timer (25 us period)
-    r.PCD_WriteRegister(MFRC522::TReloadRegH, 0x03);    // reload 1000 = 25 ms timeout
-    r.PCD_WriteRegister(MFRC522::TReloadRegL, 0xE8);
-    r.PCD_WriteRegister(MFRC522::TxASKReg, 0x40);       // force 100 % ASK modulation
-    r.PCD_WriteRegister(MFRC522::ModeReg, 0x3D);        // CRC preset 6363h (ISO 14443-3)
-    r.PCD_AntennaOn();
-    return true;
+    return rfidInit(
+        [](uint8_t reg, uint8_t v) {
+            return M5.In_I2C.writeRegister8(RC522_I2C_ADDRESS, reg, v, RFID_I2C_FREQ);
+        },
+        [](uint8_t reg, uint8_t& v) {
+            return M5.In_I2C.readRegister(RC522_I2C_ADDRESS, reg, &v, 1, RFID_I2C_FREQ);
+        },
+        [] { return (uint32_t)millis(); }, [](uint32_t ms) { delay(ms); }, RFID_RESET_TIMEOUT_MS);
 }
 
 #ifdef M5DD_SIM
