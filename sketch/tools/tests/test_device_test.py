@@ -134,6 +134,69 @@ class ResetBoardTest(unittest.TestCase):
             self.assertEqual(device_test.main(["sk", "--port", "/dev/x", "--no-upload"]), 1)
         self.assertIn("power-cycle", err.getvalue())
 
+    def test_reset_timeout_raises_reset_error_with_hint(self):
+        with mock.patch("subprocess.run",
+                        side_effect=subprocess.TimeoutExpired("reset.sh", 60)) as run:
+            with self.assertRaises(device_test.ResetError) as cm:
+                device_test.reset_board("/dev/ttyACM0")
+        self.assertIn("power-cycle", str(cm.exception))
+        self.assertEqual(run.call_args[1]["timeout"], device_test.RESET_TIMEOUT)
+
+
+class HazardTest(unittest.TestCase):
+    def test_download_mode_detected(self):
+        out = device_test.reset_hazards("boot:0x0 (DOWNLOAD(USB/UART0))\nwaiting for download\n")
+        self.assertEqual(len(out), 1)
+        self.assertIn("ROM download mode", out[0])
+
+    def test_brownout_detected(self):
+        out = device_test.reset_hazards("E BOD: Brownout detector was triggered\n")
+        self.assertEqual(len(out), 1)
+        self.assertIn("power-cycle", out[0])
+
+    def test_clean_log_has_no_hazard(self):
+        self.assertEqual(device_test.reset_hazards(LOG), [])
+
+    def test_main_fails_on_hazard_even_if_expects_match(self):
+        err = io.StringIO()
+        with mock.patch.object(device_test, "capture",
+                               return_value="boot: smoke\nwaiting for download\n"), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            self.assertEqual(device_test.main(
+                ["sk", "--port", "/dev/x", "--no-upload", "--expect", "boot: smoke"]), 1)
+        self.assertIn("#28", err.getvalue())
+
+
+class RedetectTest(unittest.TestCase):
+    def _run(self, redetect):
+        ser = mock.MagicMock()
+        ser.__enter__.return_value = ser
+        ser.read.return_value = b"x"
+        with mock.patch.object(device_test, "reset_board"), \
+                mock.patch("serial.Serial", return_value=ser):
+            device_test.capture("/dev/old", [], False, 0.01, redetect=redetect)
+        return ser
+
+    def test_redetected_port_is_opened(self):
+        ser = self._run(lambda: ("/dev/new", 0, ""))
+        self.assertEqual(ser.port, "/dev/new")
+
+    def test_no_redetect_keeps_port(self):
+        self.assertEqual(self._run(None).port, "/dev/old")
+
+    def test_redetect_failure_raises_port_lost_with_code(self):
+        with mock.patch.object(device_test, "reset_board"):
+            with self.assertRaises(device_test.PortLost) as cm:
+                device_test.capture("/dev/old", [], False, 1,
+                                    redetect=lambda: (None, 3, "ambiguous"))
+        self.assertEqual(cm.exception.code, 3)
+
+    def test_main_passes_redetect_only_for_auto_detect(self):
+        with mock.patch.object(device_test, "capture", return_value="ok") as cap, \
+                contextlib.redirect_stdout(io.StringIO()):
+            device_test.main(["sk", "--port", "/dev/x", "--no-upload"])
+        self.assertIsNone(cap.call_args[1].get("redetect"))
+
 
 class CaptureTest(unittest.TestCase):
     def _capture(self):
