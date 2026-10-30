@@ -29,7 +29,11 @@ steps:
   - wait-serial: 'lcd: pattern 6'
   - set-control: { part-id: enc, control: steps, value: 0 }
 
-  # --- touch draws a dot (no log line; screenshot only - golden not recorded yet)
+  # --- touch draws a dot (no log line)
+  # why no frame assertion yet: the custom gc9a01 chip has no Wokwi framebuffer (no screenshots);
+  # the check is `expect-chip-output: 'gc9a01: frame fnv=<hash>'` (frameLog=1) before the
+  # release, and the known-good hash must come from a real sim run (Wokwi quota exhausted;
+  # tracked in #19 - never hand-computed).
   - set-control: { part-id: touch, control: x, value: 60 }
   - set-control: { part-id: touch, control: y, value: 120 }
   - set-control: { part-id: touch, control: touched, value: 1 }
