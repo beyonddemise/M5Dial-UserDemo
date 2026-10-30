@@ -29,8 +29,9 @@ M5Unified then takes the board from `Display.getBoard()`. `board_M5Dial == 12` (
 Everything the simulation does differently from the device build:
 
 1. **Panel MISO route (`-DM5DD_SIM`, which `tools/sim.sh` always sets).**
-   `m5dd_sim_route_panel_miso()` in `examples/DialProbe/sim_shims.h` runs before `M5Dial.begin()`.
-   It calls `esp_rom_gpio_connect_in_signal(GPIO_NUM_5, FSPIQ_IN_IDX, false)`. Task 4 moves it into `m5dd::begin`.
+   `m5dd::begin()` (`libraries/M5DialDemo/src/m5dd_begin.cpp`, `sim_route_panel_miso()`) runs it before `M5Dial.begin()`,
+   so every sketch that uses `m5dd::begin` gets it (Task 4; it was `examples/DialProbe/sim_shims.h` before).
+   It calls `esp_rom_gpio_connect_in_signal(GPIO_NUM_5, FSPIQ_IN_IDX, false)`.
    - Why: in 3-wire (SIO) mode, Wokwi's ESP32-S3 SPI samples the FSPIQ (MISO) input, not FSPID.
      M5GFX leaves FSPIQ unrouted, so the RDDID read returns `00000000` and autodetect fails.
    - On real hardware, SIO mode reads FSPID and ignores FSPIQ. The route is compiled only into the sim build anyway.
@@ -143,8 +144,8 @@ Wi-Fi: Wokwi's ESP32-S3 always provides the open access point `Wokwi-GUEST` (no 
   timer `0Eh/0Fh` + TIE (:113-144), flags cleared via `bitOff(01h, 0Ch)` (:201-205),
   `disableIRQ` (:207-219) runs at boot (M5Unified.inl:3412-3413). `setSystemTimeFromRtc` then sets the ESP32 clock (RTC_Class.inl:204-234).
 - **RFID** (M5Dial `MFRC522.cpp`): `PCD_Init` = SoftReset, spin while CommandReg bit 4 (:229-243 -
-  spins forever on an unanswered read, so DialProbe probes VersionReg `37h` first and calls
-  `PCD_Init` only if the reader answers), timer `2Ah-2Dh` = 25 ms TAuto, `TxASKReg`, `ModeReg = 3Dh`
+  no timeout, so `m5dd::begin` probes VersionReg `37h` first and, if the reader answers, runs
+  `PCD_Init`'s setup with a bounded reset - see "RFID presence probe"), timer `2Ah-2Dh` = 25 ms TAuto, `TxASKReg`, `ModeReg = 3Dh`
   (CRC preset 6363h), antenna on (:197-252). Every exchange is `PCD_CommunicateWithPICC` (:388-485):
   Idle, clear ComIrq, flush FIFO, write FIFO, BitFraming, Transceive + StartSend, poll ComIrqReg for
   RxIRq/IdleIRq (success) or TimerIRq (timeout), ErrorReg, FIFOLevel, FIFO burst read (no address
@@ -168,19 +169,44 @@ turns. The diagram therefore has no KY-040 (both would drive GPIO40/41).
 
 With A on GPIO41 (`ENCODER` pin1) leading B on GPIO40, PJRC's state table counts down: from rest
 (both high) A falls -> state `1011b` -> `position--` (Encoder.h `update()`), so one clockwise detent
-gives raw `-4`. DialProbe prints `steps = detents * M5DD_ENCODER_CW_SIGN` with `-1`, so clockwise
-logs `enc: steps=1 raw=-4`. The encoder steps of `probe.test.yaml` are the check in the simulator; which
+gives raw `-4`. `M5DD_ENCODER_CW_SIGN` lives in `libraries/M5DialDemo/src/config.h`; `EncoderDetent`
+multiplies by it, so clockwise logs e.g. `enc: steps=1 total=1 raw=-3`.
+
+### Encoder detents: centred window
+
+`EncoderDetent` index = `floor((raw + 2) / 4)`, so detent 0 covers raw -2..+1. The knob rests at
+raw = multiple of 4, i.e. in the middle of a window: +-1 contact chatter at rest never steps, and a
+step fires at the half-detent point (third edge clockwise, second edge counter-clockwise; with 4
+integer counts per detent the window cannot be exactly symmetric). The boundary itself (raw 2 mod 4)
+is mid-detent, where the knob does not rest, so moving back across it undoes the step. Floor (not
+truncating) division keeps detent 0 as wide as every other.
+
+### RFID presence probe (deviation from the plan)
+
+The plan has `m5dd::begin` call `M5Dial.begin(cfg, false, true)`. `MFRC522::PCD_Reset()` busy-waits
+on `CommandReg` (`while (PCD_ReadRegister(CommandReg) & (1<<4))`, M5Dial `utility/MFRC522.cpp`), and a
+failed I2C read leaves the value uninitialised, so a missing or dead reader would hang every sketch at
+boot. `m5dd::begin` therefore calls `M5Dial.begin(cfg, false, false)`, reads VersionReg `37h` at
+`RC522_I2C_ADDRESS` over `M5.In_I2C` (100 kHz) and, only if the reader ACKs with a value other than
+00h/FFh, initialises it like `PCD_Init()` but through `M5.In_I2C` with every transfer checked and a bounded
+soft reset (`rfidInit()` in `rfid_reset.h`, 200 ms): a reader that answers VersionReg yet never
+leaves power-down, or fails any setup transfer, is reported missing instead of hanging in
+`PCD_Reset()` or being used with garbage reads (`PCD_ReadRegister()` ignores the I2C status). It logs `init: rfid ok|missing`; sketches check
+`m5dd::rfidPresent()` before using `M5Dial.Rfid`. The encoder steps of `probe.test.yaml` are the check in the simulator; which
 physical direction is "A leads" on the real knob is confirmed in Task 19's physical check.
 
 ### DialProbe
 
 `examples/DialProbe` replaces Task 1/2's Smoke sketch; Smoke's `board: 12` check became `init: board 12`.
-It logs `init: board <n>` (12 = M5Dial, i.e. the panel was autodetected), `init: display WxH`, `init: rtc|touch|rfid ok|fail` (RTC: `Rtc.isEnabled()`; touch: VENDID
-`A8h` non-zero; RFID: VersionReg not 00h/FFh), `probe: ready`, then `enc:`, `btn:`, `touch:`,
+It logs `init: board <n>` (12 = M5Dial, i.e. the panel was autodetected), `init: display WxH`, `init: rtc|touch ok|fail` (RTC: `Rtc.isEnabled()`; touch: VENDID
+`A8h` non-zero; RFID: `init: rfid ok|missing` from `m5dd::begin`, VersionReg not 00h/FFh, logged before the others), `probe: ready`, then `enc:`, `btn:`, `touch:`,
 `rtc:` (1 Hz) and `rfid: uid=` (card halted after each read, so it is logged once per presentation).
-The encoder is polled in the loop. An RFID poll without a card blocks the loop for the reader's
-25 ms timeout (every 250 ms), so the encoder scenario turns with `edgeIntervalUs = 40000`; Task 4's
-interrupt-driven `DialEncoder` removes that limit.
+Since Task 4 it starts with `m5dd::begin("DialProbe", canvas)` (logs `boot: DialProbe` and
+`init: rfid ok|missing`), counts the encoder with the interrupt-driven `dialEncoder` + `EncoderDetent`,
+logs `enc: steps=<n> total=<sum> raw=<n>` per step and `enc: idle raw=<n> total=<sum>` once the knob has
+rested 100 ms, and pushes its full canvas every loop as deliberate load. The "encoder fast" steps of
+`probe.test.yaml` turn 20 detents at 0.5 ms per edge under that load and check the exact rest counts
+(`enc: idle raw=-80 total=20`, then after 40 detents back `enc: idle raw=80 total=-20`). The slow encoder steps keep `edgeIntervalUs = 40000` (direction/detent check only).
 
 ### Sim-only differences (additions)
 
