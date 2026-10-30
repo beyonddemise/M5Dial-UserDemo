@@ -26,13 +26,17 @@ export ARDUINO_DIRECTORIES_DOWNLOADS="$SKETCH_ROOT/.arduino/staging"
 # (git-ignored there except M5DialDemo/).
 export ARDUINO_DIRECTORIES_USER="$SKETCH_ROOT"
 
-# why: arduino-cli's bundled ctags is x86_64 and fails ("bad CPU type") on Apple Silicon
-# without Rosetta. Raw universal-ctags is no drop-in (it puts `setup(); loop();` inside
+# why: arduino-cli's bundled ctags is x86_64: it fails ("bad CPU type") on Apple Silicon
+# without Rosetta, and older setup.sh runs left it a symlink to raw universal-ctags. Raw universal-ctags is no drop-in (it puts `setup(); loop();` inside
 # setup()), so compile calls select tools/ctags/ctags, a format-converting wrapper, via
-# ${M5DIAL_CTAGS_DIR:+--build-property "tools.ctags.path=$M5DIAL_CTAGS_DIR"}. Empty
-# elsewhere (Linux/CI, Rosetta): the bundled ctags is used. The toolchain is never modified.
+# ${M5DIAL_CTAGS_DIR:+--build-property "tools.ctags.path=$M5DIAL_CTAGS_DIR"}. Selected on
+# every Darwin-arm64 host, with or without Rosetta (the wrapper is correct either way and
+# independent of the bundled binary's state). Empty elsewhere (Linux/CI): the bundled ctags
+# is used. The toolchain is never modified. Hosts set up before this rule (e.g. with Rosetta)
+# need universal-ctags installed and should rerun setup.sh; it also restores any bundled
+# ctags binary an older setup.sh swapped out (not required for builds - the wrapper is used).
 M5DIAL_CTAGS_DIR=""
-if [ "$(uname -s)-$(uname -m)" = Darwin-arm64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+if [ "$(uname -s)-$(uname -m)" = Darwin-arm64 ]; then
   M5DIAL_CTAGS_DIR="$TOOLS_DIR/ctags"
   # why: prefer Homebrew's universal-ctags over whatever `ctags` comes first on PATH
   if [ -x /opt/homebrew/bin/ctags ]; then M5DIAL_UCTAGS=/opt/homebrew/bin/ctags
