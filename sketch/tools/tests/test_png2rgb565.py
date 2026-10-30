@@ -40,6 +40,8 @@ class Png2Rgb565Test(unittest.TestCase):
                 self.assertIsNotNone(m)
                 parts = m.group(1).split()
                 self.assertEqual(parts[0], "python3")
+                for q in parts[1:4]:
+                    self.assertFalse(os.path.isabs(q), "absolute path in note: %r" % q)
                 self.assertTrue(os.path.isfile(os.path.join(repo, parts[1])))
                 self.assertTrue(os.path.isfile(os.path.join(repo, parts[2])))
                 self.assertEqual(os.path.join(repo, parts[3]), hdr)
@@ -79,7 +81,13 @@ class Png2Rgb565Test(unittest.TestCase):
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 shutil.copyfile(os.path.join(png2rgb565._REPO_ROOT, rel), dst)
             args = note.split(": ", 1)[1].split()[1:]  # drop "python3"
-            subprocess.run([sys.executable] + args, cwd=tmp, check=True)
+            # Every recorded path must be repo-relative, so the command can be
+            # re-rooted into tmp and can never write outside it.
+            for a in (args[0], args[1], args[2]):
+                self.assertFalse(os.path.isabs(a) or ".." in a.split("/"),
+                                 "note path not repo-relative: %r" % a)
+            args = [os.path.join(tmp, a) if i in (1, 2) else a for i, a in enumerate(args)]
+            subprocess.run([sys.executable, *args], cwd=tmp, check=True)
             out = os.path.join(tmp, rel_assets, "launcher_icons", "icon_ble.h")
             regen = open(out, encoding="utf-8").read()
             regen_words = png2rgb565.parse_header(out)
@@ -91,7 +99,9 @@ class Png2Rgb565Test(unittest.TestCase):
         import png2rgb565
 
         note = png2rgb565.regen_note("/elsewhere/a.png", "/elsewhere/a.h", "a")
-        self.assertIn(" /elsewhere/a.png /elsewhere/a.h --name a", note)
+        a = os.path.abspath("/elsewhere/a.png").replace(os.sep, "/")
+        h = os.path.abspath("/elsewhere/a.h").replace(os.sep, "/")
+        self.assertIn(" %s %s --name a" % (a, h), note)
         inside = png2rgb565.regen_note(
             os.path.join(png2rgb565._REPO_ROOT, "x", "a.png"),
             os.path.join(png2rgb565._REPO_ROOT, "x", "a.h"), "a")
