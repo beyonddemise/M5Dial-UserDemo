@@ -69,6 +69,21 @@ steps:
   - wait-serial: 'app: close LCD_Test'
   - wait-serial: 'launcher: ready'
 
+  # --- RTC_Test: select slot 1, open with a click, one clock line, quit
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'launcher: select 1 RtcTest'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open RTC_Test'
+  - wait-serial: 'rtc: 20'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close RTC_Test'
+  - wait-serial: 'launcher: ready'
+
   # --- touch an icon: selects it (icon 2 RfidTest at (149, 210), launcher_layout::ringPoint)
   - set-control: { part-id: touch, control: x, value: 149 }
   - set-control: { part-id: touch, control: y, value: 210 }

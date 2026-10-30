@@ -372,3 +372,17 @@ with `<Class>` = `setAppName()` = the C++ class name.
 - The original `delay(100)` after a page change throttled the per-count `wasMoved()`. The
   detent tracker already gives one step per click, and the interrupt-driven counter loses
   nothing while the app draws, so the delay is gone.
+
+### RTC test (`RTC_Test`, Task 8)
+
+| Original (`_data.hal->...`)                              | Port                                                          |
+|----------------------------------------------------------|---------------------------------------------------------------|
+| `HAL::HAL*` user data, `tm rtc_time`                     | `AppContext*`; `m5::rtc_datetime_t` local                     |
+| `rtc.getTime(tm&)`                                       | `M5Dial.Rtc.getDateTime(&dt)` (`rtc: read failed` warning if it fails) |
+| `(millis() - time_count) > 1000`                         | `rtc_format::due(millis(), time_count, 1000)` (host-tested)   |
+| `_log("%d:%d:%d")`                                       | `rtc: YYYY-MM-DD HH:MM:SS` (`rtc_format::formatDateTime`, DialProbe's form) |
+| `snprintf("%02d:%02d:%02d")` in the GUI                  | `rtc_format::formatClock`, same format                        |
+| `!encoder.btn.read()` + hold loop                        | `m5dd::buttonClicked()`                                       |
+
+- The refresh time is stored before the read (upstream: after drawing), so a failing RTC logs one
+  warning per second, not one per frame.
