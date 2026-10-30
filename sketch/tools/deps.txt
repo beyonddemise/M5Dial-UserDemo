@@ -20,7 +20,7 @@ LIB_M5GFX="M5GFX@0.2.35"
 LIB_NIMBLE="NimBLE-Arduino@2.5.2"
 LIB_NEOPIXEL="Adafruit NeoPixel@1.15.5"
 LIB_LVGL="lvgl@9.6.0"
-# Libraries Task 1 needs to compile Smoke (the rest are installed on demand
+# Libraries Task 1 needed to compile its smoke sketch (now DialProbe) (the rest are installed on demand
 # by later tasks; setup.sh installs them all, they are cheap).
 
 # --- Python venv (sketch/tools/.venv) ----------------------------------------

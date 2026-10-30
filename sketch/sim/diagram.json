@@ -3,20 +3,345 @@
   "author": "Stephan Wissel",
   "editor": "wokwi",
   "parts": [
-    { "type": "board-esp32-s3-devkitc-1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
-    { "type": "chip-gc9a01", "id": "lcd", "top": -40, "left": 220, "attrs": { "readDummyBits": "0", "frameLog": "1" } }
+    {
+      "type": "board-esp32-s3-devkitc-1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "chip-gc9a01",
+      "id": "lcd",
+      "top": -40,
+      "left": 220,
+      "attrs": {
+        "readDummyBits": "0",
+        "frameLog": "1"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn",
+      "top": 160,
+      "left": 220,
+      "attrs": {
+        "color": "blue",
+        "bounce": "0",
+        "label": "BtnA G42"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "btn_pu",
+      "top": 140,
+      "left": 300,
+      "rotate": 90,
+      "attrs": {
+        "value": "10000"
+      }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzzer",
+      "top": 220,
+      "left": 220,
+      "attrs": {
+        "volume": "0.1"
+      }
+    },
+    {
+      "type": "wokwi-led-ring",
+      "id": "ring",
+      "top": -200,
+      "left": -200,
+      "attrs": {
+        "pixels": "14"
+      }
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot",
+      "top": 220,
+      "left": -200,
+      "attrs": {}
+    },
+    {
+      "type": "chip-ft3267",
+      "id": "touch",
+      "top": -40,
+      "left": 420,
+      "attrs": {}
+    },
+    {
+      "type": "chip-pcf8563",
+      "id": "rtc",
+      "top": 60,
+      "left": 420,
+      "attrs": {}
+    },
+    {
+      "type": "chip-ws1850s",
+      "id": "rfid",
+      "top": 160,
+      "left": 420,
+      "attrs": {}
+    },
+    {
+      "type": "chip-encoder",
+      "id": "enc",
+      "top": 260,
+      "left": 420,
+      "attrs": {}
+    }
   ],
   "connections": [
-    [ "esp:TX", "$serialMonitor:RX", "", [] ],
-    [ "esp:RX", "$serialMonitor:TX", "", [] ],
-    [ "lcd:SDA", "esp:5", "blue", [] ],
-    [ "lcd:SCL", "esp:6", "yellow", [] ],
-    [ "lcd:DC", "esp:4", "green", [] ],
-    [ "lcd:CS", "esp:7", "orange", [] ],
-    [ "lcd:RST", "esp:8", "purple", [] ],
-    [ "lcd:BL", "esp:9", "white", [] ],
-    [ "lcd:VCC", "esp:3V3.1", "red", [] ],
-    [ "lcd:GND", "esp:GND.1", "black", [] ]
+    [
+      "esp:TX",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "lcd:SDA",
+      "esp:5",
+      "blue",
+      []
+    ],
+    [
+      "lcd:SCL",
+      "esp:6",
+      "yellow",
+      []
+    ],
+    [
+      "lcd:DC",
+      "esp:4",
+      "green",
+      []
+    ],
+    [
+      "lcd:CS",
+      "esp:7",
+      "orange",
+      []
+    ],
+    [
+      "lcd:RST",
+      "esp:8",
+      "purple",
+      []
+    ],
+    [
+      "lcd:BL",
+      "esp:9",
+      "white",
+      []
+    ],
+    [
+      "lcd:VCC",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "lcd:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "btn:1.l",
+      "esp:42",
+      "blue",
+      []
+    ],
+    [
+      "btn:2.l",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "btn_pu:1",
+      "esp:42",
+      "blue",
+      []
+    ],
+    [
+      "btn_pu:2",
+      "esp:3V3.2",
+      "red",
+      []
+    ],
+    [
+      "buzzer:2",
+      "esp:3",
+      "orange",
+      []
+    ],
+    [
+      "buzzer:1",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "ring:DIN",
+      "esp:2",
+      "green",
+      []
+    ],
+    [
+      "ring:VCC",
+      "esp:5V",
+      "red",
+      []
+    ],
+    [
+      "ring:GND",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "pot:SIG",
+      "esp:1",
+      "yellow",
+      []
+    ],
+    [
+      "pot:VCC",
+      "esp:3V3.2",
+      "red",
+      []
+    ],
+    [
+      "pot:GND",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "touch:SDA",
+      "esp:11",
+      "blue",
+      []
+    ],
+    [
+      "touch:SCL",
+      "esp:12",
+      "yellow",
+      []
+    ],
+    [
+      "rtc:SDA",
+      "esp:11",
+      "blue",
+      []
+    ],
+    [
+      "rtc:SCL",
+      "esp:12",
+      "yellow",
+      []
+    ],
+    [
+      "rfid:SDA",
+      "esp:11",
+      "blue",
+      []
+    ],
+    [
+      "rfid:SCL",
+      "esp:12",
+      "yellow",
+      []
+    ],
+    [
+      "touch:VCC",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "touch:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "touch:INT",
+      "esp:14",
+      "green",
+      []
+    ],
+    [
+      "touch:RST",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "rtc:VDD",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "rtc:VSS",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "rfid:VCC",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "rfid:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "rfid:RST",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "enc:A",
+      "esp:41",
+      "green",
+      []
+    ],
+    [
+      "enc:B",
+      "esp:40",
+      "purple",
+      []
+    ],
+    [
+      "enc:VCC",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "enc:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ]
   ],
   "dependencies": {}
 }

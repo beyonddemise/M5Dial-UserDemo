@@ -1,7 +1,7 @@
 /**
  * @file sim_shims.h
  * @brief Sim-only workarounds for the virtual M5Dial (Wokwi). Compiled only with
- *        -DM5DD_SIM (set by tools/sim.sh). Task 4 moves this into m5dd::begin.
+ *        -DM5DD_SIM (set by tools/sim.sh). Moved here from the deleted Smoke sketch; Task 4 moves it into m5dd::begin.
  */
 #pragma once
 #ifdef M5DD_SIM
