@@ -67,15 +67,11 @@ jobs:
           SKETCH: ${{ matrix.sketch }}
           SCENARIO: ${{ matrix.scenario }}
         working-directory: sketch
-        # why: Wokwi occasionally drops the session (transport error 1006); retry once.
-        # A real failure fails both attempts; the first attempt stays visible as a warning.
-        run: |
-          rc=0
-          tools/sim.sh "$SKETCH" "$SCENARIO" --timeout-ms 60000 || rc=$?
-          if [ "$rc" -ne 0 ]; then
-            echo "::warning::sim attempt 1 failed (exit $rc), retrying once"
-            tools/sim.sh "$SKETCH" "$SCENARIO" --timeout-ms 60000
-          fi
+        # why: tools/sim_ci.sh holds the verdict logic (unit-tested in tools/tests/test_sim_ci.py):
+        # a Wokwi transport drop (code 1006) is retried once; a used-up Wokwi CI minute quota is a
+        # billing condition, not a test result, so the scenario is reported as SKIPPED (warning +
+        # step summary) and the job stays green; any other failure fails the job.
+        run: tools/sim_ci.sh --timeout-ms 60000 "$SKETCH" "$SCENARIO"
 
       - name: Upload sim output
         if: always()
