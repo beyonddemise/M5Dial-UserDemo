@@ -144,8 +144,8 @@ Wi-Fi: Wokwi's ESP32-S3 always provides the open access point `Wokwi-GUEST` (no 
   timer `0Eh/0Fh` + TIE (:113-144), flags cleared via `bitOff(01h, 0Ch)` (:201-205),
   `disableIRQ` (:207-219) runs at boot (M5Unified.inl:3412-3413). `setSystemTimeFromRtc` then sets the ESP32 clock (RTC_Class.inl:204-234).
 - **RFID** (M5Dial `MFRC522.cpp`): `PCD_Init` = SoftReset, spin while CommandReg bit 4 (:229-243 -
-  spins forever on an unanswered read, so DialProbe probes VersionReg `37h` first and calls
-  `PCD_Init` only if the reader answers), timer `2Ah-2Dh` = 25 ms TAuto, `TxASKReg`, `ModeReg = 3Dh`
+  no timeout, so `m5dd::begin` probes VersionReg `37h` first and, if the reader answers, runs
+  `PCD_Init`'s setup with a bounded reset - see "RFID presence probe"), timer `2Ah-2Dh` = 25 ms TAuto, `TxASKReg`, `ModeReg = 3Dh`
   (CRC preset 6363h), antenna on (:197-252). Every exchange is `PCD_CommunicateWithPICC` (:388-485):
   Idle, clear ComIrq, flush FIFO, write FIFO, BitFraming, Transceive + StartSend, poll ComIrqReg for
   RxIRq/IdleIRq (success) or TimerIRq (timeout), ErrorReg, FIFOLevel, FIFO burst read (no address
