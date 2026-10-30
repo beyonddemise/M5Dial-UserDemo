@@ -1,0 +1,56 @@
+# Brightness on the virtual M5Dial: knob up/down, acceleration, 0..255 clamp, quit - in ONE
+# Wokwi session (one session per sketch keeps CI minutes down).
+# Run: tools/sim.sh examples/Brightness sim/scenarios/Brightness/brightness.test.yaml
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, enc = encoder chip on GPIO41 (A) /
+# GPIO40 (B). `enc.steps` emits that many detents (positive = clockwise), 0 re-arms.
+# Stepping (brightness_step.h): each detent changes the value by 10 - ms / 8 (at least 1), where
+# ms = time since the previous processed step (one frame's detents share it), clamped to 0..255.
+name: 'Brightness: knob, clamp and quit'
+version: 1
+steps:
+  - wait-serial: 'boot: Brightness'
+  - wait-serial: 'app: open Set_Brightness'
+  - wait-serial: 'brightness: '
+
+  # --- fast clockwise burst: clamps at 255
+  # why ±100 detents: the increment comes from the time since the previous *processed* step,
+  # i.e. the frame time (all detents of one frame share it), not from the edge rate; the first
+  # detent after idle steps by 1. A frame takes well under 72 ms, so every later step is >= 2:
+  # 1 + 99 * 2 = +199 at least, enough to reach the clamp from any plausible start value
+  # (getBrightness() at open); at a typical ~20 ms frame it is +7..10 per detent.
+  # why edgeIntervalUs 500: a detent every 2 ms keeps the burst short (~0.8 s)
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 500 }
+  - set-control: { part-id: enc, control: steps, value: 100 }
+  - wait-serial: 'brightness: 255'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 200ms
+
+  # --- fast counter-clockwise burst: clamps at 0 (from 255 needs well under 100 detents)
+  - set-control: { part-id: enc, control: steps, value: -100 }
+  - wait-serial: 'brightness: 0'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  # why 200 ms: more than 80 ms since the last processed step, so the next detent steps by 1
+  - delay: 200ms
+
+  # --- slow clockwise x3 from 0: increasing 1, 2, 3 (Review Focus 3: clockwise = brighter)
+  # why edgeIntervalUs 40 ms: 160 ms per detent -> increment 1 each
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: 3 }
+  - wait-serial: 'brightness: 1'
+  - wait-serial: 'brightness: 2'
+  - wait-serial: 'brightness: 3'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 200ms
+
+  # --- slow counter-clockwise: decreasing
+  - set-control: { part-id: enc, control: steps, value: -1 }
+  - wait-serial: 'brightness: 2'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+
+  # --- button click quits (Review Focus 1: the release wait must call M5Dial.update())
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 300ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close Set_Brightness'
+  - wait-serial: 'app: restart'

@@ -20,6 +20,7 @@
 #include "../../ui_tones.h"
 #include "../lcd_test/app_lcd_test.h"
 #include "../rtc_test/app_rtc_test.h"
+#include "../set_brightness/app_set_brightness.h"
 #include "launcher_layout.h"
 #include "launcher_render_callback.hpp"
 
@@ -257,7 +258,8 @@ void Launcher::_app_open_callback(uint8_t selectedNum)
             break;
         case 2:  // MOONCAKE::USER_APP::RFID_Test
             break;
-        case 3:  // MOONCAKE::USER_APP::Set_Brightness
+        case launcher_layout::SLOT_BRIGHTNESS:
+            app_ptr = new MOONCAKE::USER_APP::Set_Brightness;
             break;
         case 4:  // MOONCAKE::USER_APP::WiFi_Scan
             break;
