@@ -31,6 +31,8 @@ class UploadBuildDirTest(unittest.TestCase):
              '#!/usr/bin/env bash\necho "build:${M5DIAL_BUILD_DIR:-unset}" >> "$LOG"\n')
         _exe(os.path.join(tools, "bin", "arduino-cli"),
              '#!/usr/bin/env bash\necho "cli:$*" >> "$LOG"\n')
+        # why: record the post-upload watchdog reset (reset.sh) call and its port
+        _exe(os.path.join(tools, "reset.sh"), '#!/usr/bin/env bash\necho "reset:$*" >> "$LOG"\n')
         log = os.path.join(tmp.name, "log")
         env = dict(os.environ, LOG=log, **env_extra)
         proc = subprocess.run([os.path.join(tools, "upload.sh"), os.path.join(tmp.name, "Foo"), "/dev/null"],
@@ -48,6 +50,12 @@ class UploadBuildDirTest(unittest.TestCase):
         root, log = self.run_upload({"M5DIAL_BUILD_DIR": "/tmp/sim/Foo"})
         self.assertNotIn("/tmp/sim/Foo", log)
         self.assertEqual(log.count(".build/Foo"), 2)
+
+    def test_watchdog_reset_runs_after_upload(self):
+        _, log = self.run_upload({})
+        lines = log.splitlines()
+        self.assertTrue(lines[-1].startswith("reset:"), lines)
+        self.assertTrue(lines[-2].startswith("cli:"), lines)
 
 
 if __name__ == "__main__":

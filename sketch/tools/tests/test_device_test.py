@@ -2,6 +2,7 @@
 import contextlib
 import io
 import os
+import subprocess
 import sys
 import unittest
 from types import SimpleNamespace
@@ -108,6 +109,139 @@ class WaitForPortTest(unittest.TestCase):
                 contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(device_test.main(["sk"]), 2)
         cap.assert_not_called()
+
+
+def _proc(returncode=0, wait_side_effect=None):
+    """A mock Popen object whose first wait() returns ``returncode`` or raises."""
+    proc = mock.Mock(pid=4242)
+    proc.wait.side_effect = wait_side_effect or [returncode]
+    return proc
+
+
+class ResetBoardTest(unittest.TestCase):
+    def test_reset_runs_reset_script_with_port_in_own_session(self):
+        with mock.patch("subprocess.Popen", return_value=_proc(0)) as popen:
+            device_test.reset_board("/dev/ttyACM0")
+        cmd = popen.call_args[0][0]
+        self.assertEqual(os.path.basename(cmd[0]), "reset.sh")
+        self.assertEqual(cmd[-1], "/dev/ttyACM0")
+        self.assertTrue(popen.call_args[1]["start_new_session"])
+
+    def test_reset_failure_raises_with_power_cycle_hint(self):
+        with mock.patch("subprocess.Popen", return_value=_proc(1)):
+            with self.assertRaises(device_test.ResetError) as cm:
+                device_test.reset_board("/dev/ttyACM0")
+        self.assertIn("power-cycle", str(cm.exception))
+
+    def test_reset_script_missing_raises_reset_error(self):
+        with mock.patch("subprocess.Popen", side_effect=OSError("not found")):
+            with self.assertRaises(device_test.ResetError):
+                device_test.reset_board("/dev/ttyACM0")
+
+    def test_main_reset_failure_exits_1_with_message(self):
+        err = io.StringIO()
+        with mock.patch.object(device_test, "capture",
+                               side_effect=device_test.ResetError("reset failed; power-cycle")), \
+                contextlib.redirect_stderr(err):
+            self.assertEqual(device_test.main(["sk", "--port", "/dev/x", "--no-upload"]), 1)
+        self.assertIn("power-cycle", err.getvalue())
+
+    def test_reset_timeout_kills_whole_process_group(self):
+        # why: reset.sh is a bash wrapper; killing only it would leave the esptool
+        # grandchild holding the serial port.
+        proc = _proc(wait_side_effect=[subprocess.TimeoutExpired("reset.sh", 60), 0])
+        with mock.patch("subprocess.Popen", return_value=proc), \
+                mock.patch("os.killpg") as killpg:
+            with self.assertRaises(device_test.ResetError) as cm:
+                device_test.reset_board("/dev/ttyACM0")
+        self.assertIn("power-cycle", str(cm.exception))
+        self.assertEqual(proc.wait.call_args_list[0][1]["timeout"], device_test.RESET_TIMEOUT)
+        killpg.assert_called_once_with(4242, device_test.signal.SIGKILL)
+
+
+class HazardTest(unittest.TestCase):
+    def test_download_mode_detected(self):
+        out = device_test.reset_hazards("boot:0x0 (DOWNLOAD(USB/UART0))\nwaiting for download\n")
+        self.assertEqual(len(out), 1)
+        self.assertIn("ROM download mode", out[0])
+
+    def test_brownout_detected(self):
+        out = device_test.reset_hazards("E BOD: Brownout detector was triggered\n")
+        self.assertEqual(len(out), 1)
+        self.assertIn("power-cycle", out[0])
+
+    def test_clean_log_has_no_hazard(self):
+        self.assertEqual(device_test.reset_hazards(LOG), [])
+
+    def test_main_fails_on_hazard_even_if_expects_match(self):
+        err = io.StringIO()
+        with mock.patch.object(device_test, "capture",
+                               return_value="boot: smoke\nwaiting for download\n"), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            self.assertEqual(device_test.main(
+                ["sk", "--port", "/dev/x", "--no-upload", "--expect", "boot: smoke"]), 1)
+        self.assertIn("#28", err.getvalue())
+
+
+class RedetectTest(unittest.TestCase):
+    def _run(self, redetect):
+        ser = mock.MagicMock()
+        ser.__enter__.return_value = ser
+        ser.read.return_value = b"x"
+        with mock.patch.object(device_test, "reset_board"), \
+                mock.patch("serial.Serial", return_value=ser):
+            device_test.capture("/dev/old", [], False, 0.01, redetect=redetect)
+        return ser
+
+    def test_redetected_port_is_opened(self):
+        ser = self._run(lambda: ("/dev/new", 0, ""))
+        self.assertEqual(ser.port, "/dev/new")
+
+    def test_no_redetect_keeps_port(self):
+        self.assertEqual(self._run(None).port, "/dev/old")
+
+    def test_redetect_failure_raises_port_lost_with_code(self):
+        with mock.patch.object(device_test, "reset_board"):
+            with self.assertRaises(device_test.PortLost) as cm:
+                device_test.capture("/dev/old", [], False, 1,
+                                    redetect=lambda: (None, 3, "ambiguous"))
+        self.assertEqual(cm.exception.code, 3)
+
+    def test_main_passes_redetect_only_for_auto_detect(self):
+        with mock.patch.object(device_test, "capture", return_value="ok") as cap, \
+                contextlib.redirect_stdout(io.StringIO()):
+            device_test.main(["sk", "--port", "/dev/x", "--no-upload"])
+        self.assertIsNone(cap.call_args[1].get("redetect"))
+
+
+class CaptureTest(unittest.TestCase):
+    def _capture(self):
+        ser = mock.MagicMock()
+        ser.__enter__.return_value = ser
+        ser.read.return_value = b"boot: smoke\n"
+        calls = []
+        with mock.patch.object(device_test, "reset_board", side_effect=lambda p: calls.append("reset")), \
+                mock.patch("serial.Serial", return_value=ser) as ctor:
+            device_test.capture("/dev/x", ["boot: smoke"], True, 1)
+        return ctor, ser, calls
+
+    def test_opens_with_dtr_high_rts_low_and_never_asserts_rts(self):
+        ctor, ser, calls = self._capture()
+        self.assertEqual(calls, ["reset"])
+        # why: port is created closed, flags set, then opened (DTR must be up at open time)
+        self.assertEqual(ser.port, "/dev/x")
+        ctor.assert_called_once()
+        self.assertIs(ser.dtr, True)
+        self.assertIs(ser.rts, False)
+        ser.open.assert_called_once()
+
+    def test_no_upload_path_resets_via_capture(self):
+        with mock.patch("subprocess.run") as run, \
+                mock.patch.object(device_test, "capture", return_value="ok") as cap, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(device_test.main(["sk", "--port", "/dev/x", "--no-upload"]), 0)
+        run.assert_not_called()
+        cap.assert_called_once()
 
 
 if __name__ == "__main__":

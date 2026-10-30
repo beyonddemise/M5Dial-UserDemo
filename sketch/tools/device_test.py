@@ -12,7 +12,9 @@ unmet conditions; exit 2 means no device was found.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -25,6 +27,13 @@ import find_port as fp
 
 TOOLS = Path(__file__).resolve().parent
 BAUD = 115200
+RESET_TIMEOUT = 60  # seconds; bounds a hung esptool so the harness cannot stall forever
+
+# why: signs that the chip ended up in ROM download mode or a brownout loop (see #28)
+_HAZARDS = [
+    (r"waiting for download", "ROM download mode"),
+    (r"Brownout detector was triggered", "a brownout loop"),
+]
 
 
 def evaluate(log: str, expects: List[str], forbids: List[str]) -> List[str]:
@@ -49,32 +58,92 @@ def evaluate(log: str, expects: List[str], forbids: List[str]) -> List[str]:
     return problems
 
 
-def _reset(ser: "serial.Serial") -> None:
-    """Pulse EN low through RTS to reboot the board (DTR kept low = run mode)."""
-    ser.dtr = False
-    ser.rts = True
-    time.sleep(0.1)
-    ser.rts = False
+class ResetError(RuntimeError):
+    """The esptool watchdog reset of the board failed."""
 
 
-def capture(port: str, expects: List[str], stop_early: bool, timeout: float) -> str:
+class PortLost(RuntimeError):
+    """The board's port was missing or ambiguous after the reset (``code`` = exit code)."""
+
+    def __init__(self, message: str, code: int):
+        super().__init__(message)
+        self.code = code
+
+
+def reset_hazards(log: str) -> List[str]:
+    """Return failure messages if ``log`` shows the board stuck in download mode/brownout."""
+    return [f"board was reset into {what} during capture - power-cycle and retry; see #28"
+            for rx, what in _HAZARDS if re.search(rx, log)]
+
+
+def reset_board(port: str) -> None:
+    """Reboot the board into the app with an esptool watchdog reset (via ``reset.sh``).
+
+    Raises:
+        ResetError: reset.sh failed; the message suggests power-cycling the board.
+    """
+    # why: an RTS pulse (or esptool's default hard-reset) leaves the ESP32-S3 in ROM download
+    # mode or a brownout loop on the M5Dial; a watchdog reset boots the app cleanly. The
+    # esptool lookup and option spelling live in reset.sh, shared with upload.sh.
+    hint = "power-cycle the board (unplug/replug USB) and retry"
+    try:
+        # why: own session/process group, so a timeout can kill reset.sh *and* its esptool
+        # child; killing only the bash wrapper would leave esptool holding the serial port.
+        proc = subprocess.Popen([str(TOOLS / "reset.sh"), port], start_new_session=True)
+    except OSError as exc:
+        raise ResetError(f"could not run reset.sh for {port} ({exc}); {hint}") from exc
+    try:
+        code = proc.wait(timeout=RESET_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+        raise ResetError(f"esptool watchdog reset of {port} timed out after "
+                         f"{RESET_TIMEOUT} s; {hint}") from exc
+    if code != 0:
+        raise ResetError(f"esptool watchdog reset of {port} failed (exit {code}); {hint}")
+
+
+def capture(port: str, expects: List[str], stop_early: bool, timeout: float,
+            redetect=None) -> str:
     """Reset the board and collect serial output for up to ``timeout`` seconds.
 
     With ``stop_early`` the capture ends as soon as all ``expects`` matched.
+
+    ``redetect`` (optional) is called after the reset and returns ``(port, code, msg)``
+    like :func:`wait_for_port`; used when the port was auto-detected.
+
+    Raises:
+        ResetError: the board could not be reset.
+        PortLost: ``redetect`` found no / several boards.
     """
     chunks: List[str] = []
-    # why: USB-CDC re-enumerates after an upload/reset; retry opening briefly
+    reset_board(port)
+    if redetect:
+        # why: the reset re-enumerates USB, so the node may have changed
+        port, code, msg = redetect()
+        if code:
+            raise PortLost(msg, code)
+    # why: the watchdog reset re-enumerates USB-CDC; retry opening until the port is back
     deadline_open = time.time() + 10
     while True:
         try:
-            ser = serial.Serial(port, BAUD, timeout=0.2)
+            ser = serial.Serial(None, BAUD, timeout=0.2)
+            ser.port = port
+            # why: HWCDC only streams while DTR is asserted. RTS must stay low: on
+            # USB-Serial/JTAG, RTS asserted = chip reset. Set before open() so the very
+            # first open does not glitch the lines.
+            # why (residual risk): the OS driver may still glitch RTS during open(), which
+            # resets the chip on USB-Serial/JTAG. Not controllable from here; verified clean
+            # on macOS, Linux hosts untested. reset_hazards() makes such a glitch fail loudly.
+            ser.dtr = True
+            ser.rts = False
+            ser.open()
             break
         except serial.SerialException:
             if time.time() > deadline_open:
                 raise
             time.sleep(0.3)
     with ser:
-        _reset(ser)
         end = time.time() + timeout
         while time.time() < end:
             data = ser.read(4096)
@@ -125,7 +194,7 @@ def main(argv: Optional[list] = None) -> int:
         except subprocess.CalledProcessError as exc:
             print(f"FAIL: upload failed (exit {exc.returncode})", file=sys.stderr)
             return 1
-        # why: the port node can change after the post-upload hard reset
+        # why: the port node can change after the post-upload reset
         time.sleep(1.5)
         if not args.port:
             port, code, msg = wait_for_port()
@@ -133,12 +202,19 @@ def main(argv: Optional[list] = None) -> int:
                 print(msg, file=sys.stderr)
                 return code
     try:
-        log = capture(port, args.expect, stop_early=not args.forbid, timeout=args.timeout)
+        log = capture(port, args.expect, stop_early=not args.forbid, timeout=args.timeout,
+                      redetect=None if args.port else wait_for_port)
+    except PortLost as exc:
+        print(exc, file=sys.stderr)
+        return exc.code
+    except ResetError as exc:
+        print(f"FAIL: {exc}", file=sys.stderr)
+        return 1
     except serial.SerialException as exc:
         print(f"FAIL: serial port {port} unusable: {exc}", file=sys.stderr)
         return 1
     print(log)
-    problems = evaluate(log, args.expect, args.forbid)
+    problems = evaluate(log, args.expect, args.forbid) + reset_hazards(log)
     if problems:
         print("FAIL:\n  " + "\n  ".join(problems), file=sys.stderr)
         return 1
