@@ -69,7 +69,7 @@ def parse_header(path):
     return [int(x, 16) for x in re.findall(r"0x[0-9a-fA-F]{1,4}", body)]
 
 
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_REPO_ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 def regen_note(png_path, out_path, name):
@@ -78,7 +78,7 @@ def regen_note(png_path, out_path, name):
         # why: paths outside the repo (or on another drive on Windows) have no
         # meaningful repo-relative form; record the absolute path so the note
         # still points at the original files instead of failing.
-        absp = os.path.abspath(p)
+        absp = os.path.realpath(p)
         try:
             r = os.path.relpath(absp, _REPO_ROOT)
         except ValueError:

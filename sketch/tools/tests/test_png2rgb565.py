@@ -107,6 +107,20 @@ class Png2Rgb565Test(unittest.TestCase):
             os.path.join(png2rgb565._REPO_ROOT, "x", "a.h"), "a")
         self.assertIn(" x/a.png x/a.h --name a", inside)
 
+    def test_regen_note_resolves_symlinks(self):
+        import tempfile
+        import png2rgb565
+
+        with tempfile.TemporaryDirectory() as tmp:
+            link = os.path.join(tmp, "link")
+            try:
+                os.symlink(png2rgb565._REPO_ROOT, link)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks unsupported")
+            note = png2rgb565.regen_note(os.path.join(link, "x", "a.png"),
+                                         os.path.join(link, "x", "a.h"), "a")
+        self.assertIn(" x/a.png x/a.h --name a", note)
+
     def test_cli_output_roundtrips(self):
         import tempfile
         import png2rgb565
