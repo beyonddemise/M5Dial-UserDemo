@@ -126,6 +126,9 @@ void setup() {
     // why: M5Unified's default serial log level comes from CORE_DEBUG_LEVEL (0 in this core's
     // default build), so INFO must be enabled explicitly.
     M5.Log.setLogLevel(m5::log_target_serial, ESP_LOG_INFO);
+    // why: HWCDC drops output until the USB host reconnects after a reset, so wait (bounded)
+    // for it or the one-shot init: lines are lost. Use the same idiom in m5dd::begin.
+    while (!Serial && millis() < 3000) delay(10);
 
     // why: board 12 = board_M5Dial, i.e. M5GFX autodetected the (virtual) panel
     M5_LOGI("init: board %d", (int)M5.getBoard());
