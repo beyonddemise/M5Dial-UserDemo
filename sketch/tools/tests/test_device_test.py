@@ -111,20 +111,32 @@ class WaitForPortTest(unittest.TestCase):
         cap.assert_not_called()
 
 
+def _proc(returncode=0, wait_side_effect=None):
+    """A mock Popen object whose first wait() returns ``returncode`` or raises."""
+    proc = mock.Mock(pid=4242)
+    proc.wait.side_effect = wait_side_effect or [returncode]
+    return proc
+
+
 class ResetBoardTest(unittest.TestCase):
-    def test_reset_runs_reset_script_with_port(self):
-        with mock.patch("subprocess.run") as run:
+    def test_reset_runs_reset_script_with_port_in_own_session(self):
+        with mock.patch("subprocess.Popen", return_value=_proc(0)) as popen:
             device_test.reset_board("/dev/ttyACM0")
-        cmd = run.call_args[0][0]
+        cmd = popen.call_args[0][0]
         self.assertEqual(os.path.basename(cmd[0]), "reset.sh")
         self.assertEqual(cmd[-1], "/dev/ttyACM0")
+        self.assertTrue(popen.call_args[1]["start_new_session"])
 
     def test_reset_failure_raises_with_power_cycle_hint(self):
-        err = subprocess.CalledProcessError(1, "reset.sh")
-        with mock.patch("subprocess.run", side_effect=err):
+        with mock.patch("subprocess.Popen", return_value=_proc(1)):
             with self.assertRaises(device_test.ResetError) as cm:
                 device_test.reset_board("/dev/ttyACM0")
         self.assertIn("power-cycle", str(cm.exception))
+
+    def test_reset_script_missing_raises_reset_error(self):
+        with mock.patch("subprocess.Popen", side_effect=OSError("not found")):
+            with self.assertRaises(device_test.ResetError):
+                device_test.reset_board("/dev/ttyACM0")
 
     def test_main_reset_failure_exits_1_with_message(self):
         err = io.StringIO()
@@ -134,13 +146,17 @@ class ResetBoardTest(unittest.TestCase):
             self.assertEqual(device_test.main(["sk", "--port", "/dev/x", "--no-upload"]), 1)
         self.assertIn("power-cycle", err.getvalue())
 
-    def test_reset_timeout_raises_reset_error_with_hint(self):
-        with mock.patch("subprocess.run",
-                        side_effect=subprocess.TimeoutExpired("reset.sh", 60)) as run:
+    def test_reset_timeout_kills_whole_process_group(self):
+        # why: reset.sh is a bash wrapper; killing only it would leave the esptool
+        # grandchild holding the serial port.
+        proc = _proc(wait_side_effect=[subprocess.TimeoutExpired("reset.sh", 60), 0])
+        with mock.patch("subprocess.Popen", return_value=proc), \
+                mock.patch("os.killpg") as killpg:
             with self.assertRaises(device_test.ResetError) as cm:
                 device_test.reset_board("/dev/ttyACM0")
         self.assertIn("power-cycle", str(cm.exception))
-        self.assertEqual(run.call_args[1]["timeout"], device_test.RESET_TIMEOUT)
+        self.assertEqual(proc.wait.call_args_list[0][1]["timeout"], device_test.RESET_TIMEOUT)
+        killpg.assert_called_once_with(4242, device_test.signal.SIGKILL)
 
 
 class HazardTest(unittest.TestCase):

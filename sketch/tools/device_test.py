@@ -12,7 +12,9 @@ unmet conditions; exit 2 means no device was found.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -83,11 +85,22 @@ def reset_board(port: str) -> None:
     # why: an RTS pulse (or esptool's default hard-reset) leaves the ESP32-S3 in ROM download
     # mode or a brownout loop on the M5Dial; a watchdog reset boots the app cleanly. The
     # esptool lookup and option spelling live in reset.sh, shared with upload.sh.
+    hint = "power-cycle the board (unplug/replug USB) and retry"
     try:
-        subprocess.run([str(TOOLS / "reset.sh"), port], check=True, timeout=RESET_TIMEOUT)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
-        raise ResetError(f"esptool watchdog reset of {port} failed ({exc}); "
-                         "power-cycle the board (unplug/replug USB) and retry") from exc
+        # why: own session/process group, so a timeout can kill reset.sh *and* its esptool
+        # child; killing only the bash wrapper would leave esptool holding the serial port.
+        proc = subprocess.Popen([str(TOOLS / "reset.sh"), port], start_new_session=True)
+    except OSError as exc:
+        raise ResetError(f"could not run reset.sh for {port} ({exc}); {hint}") from exc
+    try:
+        code = proc.wait(timeout=RESET_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+        raise ResetError(f"esptool watchdog reset of {port} timed out after "
+                         f"{RESET_TIMEOUT} s; {hint}") from exc
+    if code != 0:
+        raise ResetError(f"esptool watchdog reset of {port} failed (exit {code}); {hint}")
 
 
 def capture(port: str, expects: List[str], stop_early: bool, timeout: float,
