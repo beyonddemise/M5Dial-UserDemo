@@ -307,8 +307,8 @@ measured 540,283 B flash / 31,612 B globals with it off, and 537,283 B / 27,964 
 
 As upstream `main.cpp`: if `ENABLE_FACTORY_TEST` (config.h, default 1) is set and the button is
 held for more than 1000 ms at boot, polled every 10 ms with `M5Dial.update()`, the sketch plays
-4 kHz/30 ms twice (50 ms apart). Until Task 15 it then logs `factory: not ported` and continues
-with the launcher. Upstream ran the factory test forever instead.
+4 kHz/30 ms twice (50 ms apart), then runs `FactoryTest` (Task 15, "Factory test" below), which
+ends with a power-off, so the launcher is not reached in that boot.
 
 ### Board options: 8 MB flash, `huge_app` (Task 6 fix round 1)
 
@@ -601,3 +601,43 @@ because the port stores no files.
   (`FlashSize=8M` in `tools/deps.txt`, `--flash-size 8MB` in the build's `flash_args`), and
   `gen_esp32part.py` decodes the built `UserDemo.ino.partitions.bin` to the table above. The
   flash backup and restore tools always handle the whole 8 MB chip, whatever the table.
+
+## Factory test, Task 15
+
+### Factory test (`FactoryTest`)
+
+Wiring, controls and the summary: `docs/FACTORY_TEST_JIG.md`.
+
+| Original (`main/apps/app_factory_test`)                   | Port (`src/apps/factory_test`)                               |
+|-----------------------------------------------------------|--------------------------------------------------------------|
+| `onCreate()`: LCD, RTC, RFID, IO, (Wi-Fi, BLE commented out), RTC wake-up | the same order, without Wi-Fi/BLE; each step is followed by `promptVerdict()`, then a summary before the wake-up |
+| no verdicts: the operator judged by eye                   | `factory_test::FactoryReport` (`report.h`, host-tested): PASS/FAIL/SKIP per step, `factory: LCD=.. RTC=.. RFID=.. IO=..` |
+| embedded `LCD_Test`/`RTC_Test`/`RFID_Test`, theme black, empty icon sprite | the ported apps embedded the same way, theme black, with their launcher icon (`m5dd::initGui`), `M5Dial.update()` each frame |
+| per-frame Chinese overlay on the RTC/RFID apps ("[RTC测试] ...") | dropped: it was printed over the ported GUIs; the step name is on the verdict prompt |
+| `_io_test_rgb_init()`: esp-idf `led_strip`, RMT, SK6812, GPIO2 | `Adafruit_NeoPixel(14, 2, NEO_GRB + NEO_KHZ800)` (`LIB_NEOPIXEL`) |
+| `adc_read_get_value()`: adc_oneshot ch0 + calibration, 11 dB | `analogReadMilliVolts(1)` (same pin, calibrated mV, 11 dB default) |
+| `3000 - mv`, `>2900` → 3000, `/500`; lit if `i <= n` or `13-i <= n` | `io_led_level::level()` / `lit()` (host-tested); level clamped at 0 (see below) |
+| own `I2C_NUM_1` driver on G13/G15 + address probe, every 800 ms | `M5Dial.Ex_I2C.begin()` + `scanID()` (0x08-0x77), every 800 ms |
+| IO screen: `[电池]` (the mapped value / 1000), `[PORT-B]`, `[PORT-A]` | `[PORT-B] <mV> <level>`, `[PORT-A] <addresses>` or `无` |
+| `!btn.read()` + hold loops                                | `m5dd::buttonClicked()` / `isPressed()` waits with `M5Dial.update()` |
+| wake-up: `clearIRQ`, `setAlarmIRQ(4)`, black, `delay(500)`, `powerOff()` | the same, after a click on the summary; `factory: rtc wakeup in 4 s` logged and flushed first |
+
+- **Only four steps:** the plan's flow is LCD → RTC → RFID → IO. The original's `_wifi_test()` and
+  `_ble_test()` were already commented out in `onCreate()`; `wifi_test.cpp`/`ble_test.cpp` are not
+  ported (the launcher's Wi-Fi scan and BLE server apps cover that hardware).
+- **Verdict prompt:** `promptVerdict(canvas, step, default = Pass)`: PASS/FAIL/SKIP top to bottom,
+  the knob moves the highlight (clockwise = next, clamped, not wrapping: an overshoot past SKIP must
+  not land on PASS), a click confirms. Highlight logic in `verdict_choice.h` (host-tested). It logs
+  `factory: prompt <step>` (scenarios wait for it) and `factory: verdict <step>=<v>`.
+- **RFID reader missing:** the step logs `factory: rfid missing`, never runs `RFID_Test` or touches
+  `M5Dial.Rfid`, and the prompt starts on FAIL.
+- **LED level clamp:** C++ `/` truncates, so up to 3499 mV the original also gave 0 (3.3 V → 0).
+  Above that it gave -1 (ring dark); the port clamps to 0, so the level stays 0..6 and two end
+  pixels stay lit. The log's `leds=` value is the level, not the number of lit pixels.
+- **Ring off after the step:** the original left the ring lit until the power-off; the port
+  clears it when the IO step ends.
+- **IO log line:** `factory: io adc=<mV> leds=<level> i2c=[<0xAA 0xBB>]` after every Port A scan
+  (800 ms), not every frame.
+- **Entry:** `UserDemo.ino` runs `FactoryTest` after the boot hold (above). The original
+  launcher had no factory-test entry, so the launcher is unchanged. The `launcher.test.yaml`
+  scenario no longer holds the button at boot (that would now enter the factory test).
