@@ -187,8 +187,10 @@ The plan has `m5dd::begin` call `M5Dial.begin(cfg, false, true)`. `MFRC522::PCD_
 on `CommandReg` (`while (PCD_ReadRegister(CommandReg) & (1<<4))`, M5Dial `utility/MFRC522.cpp`), and a
 failed I2C read leaves the value uninitialised, so a missing or dead reader would hang every sketch at
 boot. `m5dd::begin` therefore calls `M5Dial.begin(cfg, false, false)`, reads VersionReg `37h` at
-`RC522_I2C_ADDRESS` over `M5.In_I2C` (100 kHz) and calls `M5Dial.Rfid.begin()` (= `PCD_Init()`) only if
-the reader ACKs with a value other than 00h/FFh. It logs `init: rfid ok|missing`; sketches check
+`RC522_I2C_ADDRESS` over `M5.In_I2C` (100 kHz) and, only if the reader ACKs with a value other than
+00h/FFh, initialises it like `PCD_Init()` but with a bounded soft reset (`rfidSoftReset()` in
+`rfid_reset.h`, 200 ms): a reader that answers VersionReg yet never leaves power-down is reported
+missing instead of hanging in `PCD_Reset()`. It logs `init: rfid ok|missing`; sketches check
 `m5dd::rfidPresent()` before using `M5Dial.Rfid`. The encoder steps of `probe.test.yaml` are the check in the simulator; which
 physical direction is "A leads" on the real knob is confirmed in Task 19's physical check.
 

@@ -5,6 +5,7 @@
 #include "m5dd_begin.h"
 
 #include "dial_encoder.h"
+#include "rfid_reset.h"
 
 #ifdef M5DD_SIM
 #include <esp_rom_gpio.h>
@@ -17,6 +18,7 @@ constexpr int CANVAS_SIZE = 240;  ///< the round panel is 240x240
 constexpr int CANVAS_BPP = 16;    ///< RGB565: 115 KB, fits without PSRAM
 constexpr uint8_t RFID_REG_VERSION = 0x37;   ///< MFRC522 VersionReg
 constexpr uint32_t RFID_I2C_FREQ = 100000;   ///< as M5Dial's MFRC522 register access
+constexpr uint32_t RFID_RESET_TIMEOUT_MS = 200;  ///< bound on the soft reset (PCD_Reset has none)
 
 bool rfid_present = false;
 
@@ -28,6 +30,32 @@ bool probe_rfid() {
     uint8_t v = 0;
     return M5.In_I2C.readRegister(RC522_I2C_ADDRESS, RFID_REG_VERSION, &v, 1, RFID_I2C_FREQ) &&
            v != 0x00 && v != 0xFF;
+}
+
+/**
+ * PCD_Init() with a bounded soft reset: rfidSoftReset() replaces PCD_Reset(), then the same
+ * timer/ASK/CRC register setup and antenna-on as M5Dial 1.0.3's MFRC522::PCD_Init().
+ * @return false if the reader never left power-down (it is then treated as missing)
+ *
+ * why not M5Dial.Rfid.begin(): PCD_Init() calls PCD_Reset(), which spins forever on the
+ * PowerDown bit; a VersionReg answer does not prove the reset will complete.
+ */
+bool init_rfid() {
+    MFRC522& r = M5Dial.Rfid;
+    if (!rfidSoftReset([&](uint8_t reg, uint8_t v) { r.PCD_WriteRegister(reg, v); },
+                       [&](uint8_t reg) { return r.PCD_ReadRegister(reg); },
+                       [] { return (uint32_t)millis(); }, [](uint32_t ms) { delay(ms); },
+                       RFID_RESET_TIMEOUT_MS)) {
+        return false;
+    }
+    r.PCD_WriteRegister(MFRC522::TModeReg, 0x80);       // timer starts after each transmission
+    r.PCD_WriteRegister(MFRC522::TPrescalerReg, 0xA9);  // 40 kHz timer (25 us period)
+    r.PCD_WriteRegister(MFRC522::TReloadRegH, 0x03);    // reload 1000 = 25 ms timeout
+    r.PCD_WriteRegister(MFRC522::TReloadRegL, 0xE8);
+    r.PCD_WriteRegister(MFRC522::TxASKReg, 0x40);       // force 100 % ASK modulation
+    r.PCD_WriteRegister(MFRC522::ModeReg, 0x3D);        // CRC preset 6363h (ISO 14443-3)
+    r.PCD_AntennaOn();
+    return true;
 }
 
 #ifdef M5DD_SIM
@@ -58,9 +86,9 @@ void begin(const char* sketchName, M5Canvas& canvas) {
     // why: enableEncoder=false - M5Dial's ENCODER attaches no interrupts on GPIO40/41
     // (m5stack/M5Dial#8); dialEncoder counts in an ISR instead (D12).
     // why enableRFID=false (deviation from the plan's M5Dial.begin(cfg, false, true)):
-    // MFRC522::PCD_Reset() busy-waits forever on an unanswered CommandReg read, so a missing
-    // or dead reader would hang every sketch at boot; RFID is initialised below only if the
-    // reader answers (see docs/PORTING_NOTES.md "RFID presence probe").
+    // MFRC522::PCD_Reset() busy-waits forever on CommandReg, so a missing or stuck reader
+    // would hang every sketch at boot; RFID is initialised below only if the reader answers,
+    // with a bounded reset (see docs/PORTING_NOTES.md "RFID presence probe").
     M5Dial.begin(M5.config(), /*enableEncoder*/ false, /*enableRFID*/ false);
     dialEncoder.begin();
     // why: M5Unified's default serial log level comes from CORE_DEBUG_LEVEL (0 in this core's
@@ -71,8 +99,7 @@ void begin(const char* sketchName, M5Canvas& canvas) {
     while (!Serial && millis() < 3000) delay(10);
     M5_LOGI("boot: %s", sketchName);
 
-    rfid_present = probe_rfid();
-    if (rfid_present) M5Dial.Rfid.begin();  // = PCD_Init(), what enableRFID=true would call
+    rfid_present = probe_rfid() && init_rfid();
     M5_LOGI("init: rfid %s", rfid_present ? "ok" : "missing");
 
     canvas.setColorDepth(CANVAS_BPP);
