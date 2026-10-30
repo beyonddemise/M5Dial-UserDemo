@@ -10,12 +10,15 @@ name: sketch
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    # why no ready_for_review: drafts already build on `opened`; it would rebuild the same SHA
+    types: [opened, synchronize, reopened]
     paths:
       - 'sketch/**'
       - '.github/workflows/sketch.yml'
+  # why push on main only: every port/** branch is built through its PR; pushing to both would
+  # run the same commit twice
   push:
-    branches: [main, 'port/**']
+    branches: [main]
     paths:
       - 'sketch/**'
       - '.github/workflows/sketch.yml'
@@ -23,10 +26,11 @@ on:
 permissions:
   contents: read
 
-# why: a newer run for the same ref supersedes the old one
+# why cancel only on PRs: a newer PR commit supersedes the old run, but on main every pushed
+# (merged) commit keeps its own run - main has no other CI record of whether a commit built
 concurrency:
   group: sketch-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   chips:

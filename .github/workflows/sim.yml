@@ -17,6 +17,9 @@ on:
       - 'sketch/examples/**'
       - 'sketch/libraries/M5DialDemo/**'
       - 'sketch/UserDemo/**'
+      # why: the scenario toolchain (sim.sh, sim_ci.sh, build.sh, setup.sh, deps.txt pins of
+      # wokwi-cli and the core); still label-gated, so no extra quota
+      - 'sketch/tools/**'
       - '.github/workflows/sim.yml'
 
 permissions:

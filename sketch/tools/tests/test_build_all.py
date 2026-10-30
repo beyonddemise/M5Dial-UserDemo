@@ -95,6 +95,23 @@ class BuildAllTest(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertEqual(calls, [])
 
+    def test_missing_userdemo_is_an_error_even_with_examples(self):
+        # why: a renamed or moved UserDemo.ino must not leave CI green while the main firmware
+        # is never compiled
+        proc, calls, _, _ = self.run_all(["examples/LcdTest"])
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("::error::", proc.stderr)
+        self.assertIn("UserDemo", proc.stderr)
+        self.assertEqual(calls, [])
+
+    def test_example_without_matching_ino_is_warned_and_skipped(self):
+        proc, calls, _, _ = self.run_all(["UserDemo", "examples/LcdTest"],
+                                         extra_dirs=["examples/Stray"])
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("::warning::", proc.stderr)
+        self.assertIn("examples/Stray", proc.stderr)
+        self.assertEqual(calls, ["UserDemo", "examples/LcdTest"])
+
     def test_missing_size_line_still_passes(self):
         proc, _, summary, _ = self.run_all(["UserDemo"], {"UserDemo": (0, "done\n")})
         self.assertEqual(proc.returncode, 0)

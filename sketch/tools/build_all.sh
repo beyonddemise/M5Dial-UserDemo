@@ -10,7 +10,8 @@
 # "PASS <Name>" or "::error::build failed: <Name>".
 # Step summary ($GITHUB_STEP_SUMMARY, if set): a markdown table with the flash use from
 # arduino-cli's "Sketch uses N bytes (P%) of program storage space. Maximum is M bytes." line.
-# Exit code: 1 if any build failed, 2 if no sketch was found, else 0.
+# An examples/<Name>/ without <Name>.ino is skipped with a ::warning::.
+# Exit code: 1 if any build failed, 2 if UserDemo/UserDemo.ino is missing, else 0.
 #
 # Env: BUILD_SH overrides the build script (default: tools/build.sh next to this script) - the
 # unit tests in tests/test_build_all.py use a fake that prints canned arduino-cli output.
@@ -21,13 +22,20 @@ root="$(cd "${1:-$tools/..}" && pwd)"
 build_sh="${BUILD_SH:-$tools/build.sh}"
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 
-sketches=()
-[ -f "$root/UserDemo/UserDemo.ino" ] && sketches+=("$root/UserDemo")
+# why an error, not a skip: a renamed or moved UserDemo.ino would otherwise leave CI green
+# while the main firmware is never compiled
+[ -f "$root/UserDemo/UserDemo.ino" ] ||
+  { echo "::error::build_all.sh: no UserDemo/UserDemo.ino under $root" >&2; exit 2; }
+sketches=("$root/UserDemo")
 for d in "$root"/examples/*/; do
+  [ -d "$d" ] || continue  # no examples/ (the glob stayed literal)
   d="${d%/}"
-  [ -f "$d/$(basename "$d").ino" ] && sketches+=("$d")
+  if [ -f "$d/$(basename "$d").ino" ]; then
+    sketches+=("$d")
+  else
+    echo "::warning::build_all.sh: skipped examples/$(basename "$d") (no $(basename "$d").ino)" >&2
+  fi
 done
-[ "${#sketches[@]}" -gt 0 ] || { echo "::error::build_all.sh: no sketches under $root" >&2; exit 2; }
 
 rows=(); failed=()
 out="$(mktemp)"
