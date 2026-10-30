@@ -59,28 +59,43 @@ class Png2Rgb565Test(unittest.TestCase):
     def test_cli_regeneration_keeps_note_pragma_and_data(self):
         """Regenerating a committed header via its own note reproduces note, pragma and data.
 
-        Only the lcd-image-converter banner (between the note and the pragma) differs.
+        Runs in a temporary copy of the needed subtree (script + icon_ble png/header) so
+        the real tree is never written.  Only the lcd-image-converter banner differs.
         """
         import shutil
         import subprocess
+        import tempfile
         import png2rgb565
 
+        rel_assets = os.path.relpath(ASSETS, png2rgb565._REPO_ROOT)
         hdr = os.path.join(HEADER_DIRS[0], "icon_ble.h")
         committed = open(hdr, encoding="utf-8").read()
         note = committed.splitlines()[0]
-        repo = png2rgb565._REPO_ROOT
-        backup = hdr + ".bak"
-        shutil.copyfile(hdr, backup)
-        try:
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel in ("sketch/tools/png2rgb565.py",
+                        rel_assets + "/png/icon_ble.png",
+                        rel_assets + "/launcher_icons/icon_ble.h"):
+                dst = os.path.join(tmp, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(os.path.join(png2rgb565._REPO_ROOT, rel), dst)
             args = note.split(": ", 1)[1].split()[1:]  # drop "python3"
-            subprocess.run([sys.executable] + args, cwd=repo, check=True)
-            regen = open(hdr, encoding="utf-8").read()
-            regen_words = png2rgb565.parse_header(hdr)
-        finally:
-            shutil.move(backup, hdr)
+            subprocess.run([sys.executable] + args, cwd=tmp, check=True)
+            out = os.path.join(tmp, rel_assets, "launcher_icons", "icon_ble.h")
+            regen = open(out, encoding="utf-8").read()
+            regen_words = png2rgb565.parse_header(out)
         self.assertEqual(regen.splitlines()[0], note)
         self.assertEqual(regen.count("#pragma once"), 1)
         self.assertEqual(regen_words, png2rgb565.parse_header(hdr))
+
+    def test_regen_note_outside_repo_keeps_given_paths(self):
+        import png2rgb565
+
+        note = png2rgb565.regen_note("/elsewhere/a.png", "/elsewhere/a.h", "a")
+        self.assertIn(" /elsewhere/a.png /elsewhere/a.h --name a", note)
+        inside = png2rgb565.regen_note(
+            os.path.join(png2rgb565._REPO_ROOT, "x", "a.png"),
+            os.path.join(png2rgb565._REPO_ROOT, "x", "a.h"), "a")
+        self.assertIn(" x/a.png x/a.h --name a", inside)
 
     def test_cli_output_roundtrips(self):
         import tempfile

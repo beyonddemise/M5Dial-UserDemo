@@ -75,7 +75,15 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 def regen_note(png_path, out_path, name):
     """Return the one-line ``// Regenerable`` note with repo-relative paths."""
     def rel(p):
-        return os.path.relpath(os.path.abspath(p), _REPO_ROOT).replace(os.sep, "/")
+        # why: paths outside the repo (or on another drive on Windows) have no
+        # meaningful repo-relative form; keep them as given instead of failing.
+        try:
+            r = os.path.relpath(os.path.abspath(p), _REPO_ROOT)
+        except ValueError:
+            return p.replace(os.sep, "/")
+        if r == os.pardir or r.startswith(os.pardir + os.sep):
+            return p.replace(os.sep, "/")
+        return r.replace(os.sep, "/")
     return ("// Regenerable (from repo root): python3 sketch/tools/png2rgb565.py "
             "%s %s --name %s\n" % (rel(png_path), rel(out_path), name))
 
