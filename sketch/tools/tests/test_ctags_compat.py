@@ -93,6 +93,20 @@ class WrapperFormatTest(unittest.TestCase):
         self.assertEqual(out["f"]["line"], "20")
         self.assertEqual(out["f"]["returntype"], "int")
 
+    def test_universal_ctags_reports_physical_lines(self):
+        """Pins why the wrapper renumbers: even with --line-directives (always passed by
+        arduino-cli) universal-ctags applies line markers to the file name only, and
+        reports physical lines. If a future universal-ctags fixes this, the wrapper's
+        renumbering would double-translate - this test then fails first."""
+        uctags = shutil.which("ctags")
+        if not uctags or "Universal" not in subprocess.run(
+                [uctags, "--version"], capture_output=True, text=True).stdout:
+            self.skipTest("universal-ctags not installed")
+        rows = subprocess.run([uctags, *CTAGS_ARGS, self.src], capture_output=True,
+                              text=True, check=True).stdout.splitlines()
+        raw = {r.split("\t")[0]: (r.split("\t")[1], _fields(r)["line"]) for r in rows}
+        self.assertEqual(raw["setup"], ("/x/A.ino", "3"))  # logical line is 2
+        self.assertEqual(raw["f"], ("/x/A.ino", "7"))      # logical line is 20
 
     def test_rejects_non_universal_ctags(self):
         """BSD/Exuberant ctags must fail loudly instead of mis-generating prototypes."""
@@ -117,7 +131,8 @@ class SketchPrototypesTest(unittest.TestCase):
         self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
         with open(os.path.join(SKETCH_ROOT, ".build", "CtagsProto", "sketch",
                                "CtagsProto.ino.cpp")) as f:
-            code = [l for l in f.read().splitlines() if not l.startswith("#line")]
+            raw = f.read().splitlines()
+        code = [l for l in raw if not l.startswith("#line")]
         hint = ("broken .ino prototypes - check the ctags selection in tools/env.sh\n"
                 + "\n".join(code))
         start = code.index("void setup() {")
@@ -126,6 +141,19 @@ class SketchPrototypesTest(unittest.TestCase):
             self.assertIn(p, protos, hint)
         body = code[start + 1:code.index("}", start)]
         self.assertEqual(body, ["  Serial.begin(115200);", "  Serial.println(label());"], hint)
+        # Each prototype's #line must name the source line of its definition, so compiler
+        # diagnostics point at the right place.
+        with open(os.path.join(FIXTURE, "CtagsProto.ino")) as f:
+            src = f.read().splitlines()
+        defs = {"setup": "void setup() {", "loop": "void loop() {",
+                "helper": "int helper(int x) {", "label": "const char* label() {"}
+        for i, line in enumerate(raw[:raw.index("void setup() {")]):
+            m = re.match(r"\S.* \*?(\w+)\(.*\);$", line)
+            if m and m.group(1) in defs:
+                target = re.match(r'#line (\d+) "', raw[i - 1])
+                self.assertIsNotNone(target, hint)
+                self.assertEqual(src[int(target.group(1)) - 1], defs.pop(m.group(1)), hint)
+        self.assertEqual(defs, {}, hint)
 
 
 if __name__ == "__main__":
