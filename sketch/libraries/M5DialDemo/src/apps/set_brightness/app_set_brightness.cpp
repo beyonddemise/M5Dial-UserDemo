@@ -107,5 +107,13 @@ void Set_Brightness::onRunning()
 
 void Set_Brightness::onDestroy()
 {
+    // why: a click during the 600 ms ease-out ends onRunning() before the animation lands, which
+    // would leave the backlight at an intermediate value while page and log show the target
+    int target = brightness_step::clamp(_data.brightness);
+    if (target != _data.applied)
+    {
+        M5Dial.Display.setBrightness(target);
+        _data.applied = target;
+    }
     M5_LOGI("app: close %s", getAppName().c_str());
 }
