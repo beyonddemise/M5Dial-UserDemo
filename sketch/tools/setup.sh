@@ -79,8 +79,13 @@ done
 # universal-ctags exists, and undo the binary swap earlier versions of this script did
 # (bundled binary moved to ctags.x86_64, ctags replaced by a symlink/wrapper).
 if [ "$os-$arch" = Darwin-arm64 ]; then
-  [ -x /opt/homebrew/bin/ctags ] && /opt/homebrew/bin/ctags --version 2>/dev/null | grep -q Universal \
-    || brew install universal-ctags
+  # why: same lookup as env.sh (Homebrew first, else PATH), so a Universal Ctags installed
+  # any other way is accepted and brew is only needed when none is usable.
+  if [ -x /opt/homebrew/bin/ctags ]; then uctags=/opt/homebrew/bin/ctags
+  else uctags="$(command -v ctags || true)"; fi
+  if [ -z "$uctags" ] || ! "$uctags" --version 2>/dev/null | grep -q Universal; then
+    brew install universal-ctags
+  fi
   shopt -s nullglob  # why: no ctags dir yet (fresh data dir) must not run the loop on a literal glob
   for d in "$ARDUINO_DIRECTORIES_DATA"/packages/builtin/tools/ctags/*/; do
     if [ -f "$d/ctags.x86_64" ]; then rm -f "$d/ctags"; mv "$d/ctags.x86_64" "$d/ctags"; fi

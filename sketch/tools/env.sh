@@ -32,7 +32,9 @@ export ARDUINO_DIRECTORIES_USER="$SKETCH_ROOT"
 # ${M5DIAL_CTAGS_DIR:+--build-property "tools.ctags.path=$M5DIAL_CTAGS_DIR"}. Selected on
 # every Darwin-arm64 host, with or without Rosetta (the wrapper is correct either way and
 # independent of the bundled binary's state). Empty elsewhere (Linux/CI): the bundled ctags
-# is used. The toolchain is never modified.
+# is used. The toolchain is never modified. Hosts set up before this rule (e.g. with Rosetta)
+# need universal-ctags installed and should rerun setup.sh; it also restores any bundled
+# ctags binary an older setup.sh swapped out (not required for builds - the wrapper is used).
 M5DIAL_CTAGS_DIR=""
 if [ "$(uname -s)-$(uname -m)" = Darwin-arm64 ]; then
   M5DIAL_CTAGS_DIR="$TOOLS_DIR/ctags"

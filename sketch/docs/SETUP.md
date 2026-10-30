@@ -28,6 +28,9 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    bundled binary if an older version of it had swapped it out. A bare `arduino-cli compile`
    (without the property) will not work on such a Mac - always build via `tools/build.sh`.
    `tools/tests/test_ctags_compat.py` checks the generated prototypes end to end.
+   *Upgrading:* if you set up before the wrapper was used on Rosetta-enabled Macs, rerun
+   `sketch/tools/setup.sh` (or just `brew install universal-ctags`) so the wrapper has a real
+   universal-ctags; the restore of the bundled binary is tidy-up only, builds do not need it.
 4. **Back up the factory flash (once, before any upload):** connect the M5Dial via USB-C, then
    `sketch/tools/backup_flash.sh`. It writes `sketch/backup/m5dial-factory-<date>.bin`
    (exactly 8 388 608 bytes) plus `.sha256`, written as `.partial` and renamed only once verified.
