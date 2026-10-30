@@ -188,6 +188,18 @@ static void test_stop_freezes_clock(void) {
   assert(rd8(0x02) == 0x02);
 }
 
+static void test_stop_after_midnight_keeps_weekday(void) {
+  /* why: STOP rebases the clock; the weekday base must move with it (CodeRabbit #29) */
+  boot("2026-10-29 23:59:58");
+  uint8_t wd0 = rd8(0x06) & 0x07;
+  advance(3e9); /* now 2026-10-30 00:00:01 */
+  wr8(0x00, CTRL1_STOP);
+  assert((rd8(0x06) & 0x07) == (wd0 + 1) % 7);
+  wr8(0x00, 0x00);
+  advance(1e9);
+  assert((rd8(0x06) & 0x07) == (wd0 + 1) % 7);
+}
+
 static void test_pointer_wraps(void) {
   boot("2026-10-30 12:00:00");
   uint8_t b[3];
@@ -203,6 +215,7 @@ int main(void) {
   test_alarm_does_not_touch_latched_registers();
   test_countdown_timer_irq();
   test_stop_freezes_clock();
+  test_stop_after_midnight_keeps_weekday();
   test_pointer_wraps();
   printf("all pcf8563 host tests passed\n");
   return 0;

@@ -251,7 +251,11 @@ static void write_reg(chip_t *c, uint8_t reg, uint8_t v) {
   case REG_CTRL1: {
     bool stop = (v & CTRL1_STOP) != 0;
     if (stop && !c->stopped) {
-      c->base_epoch = now_epoch(c);
+      /* why: weekday_at() counts days from base_epoch, so rebase the weekday together with it
+         (otherwise a STOP after a midnight rollover keeps the previous day) */
+      int64_t now = now_epoch(c);
+      c->base_wday = weekday_at(c, now);
+      c->base_epoch = now;
       c->stopped = true;
       timer_stop(c->tick);
     } else if (!stop && c->stopped) {

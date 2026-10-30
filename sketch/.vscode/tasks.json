@@ -14,7 +14,7 @@
       "command": "\"${workspaceFolder}/tools/.venv/bin/python\" \"${workspaceFolder}/tools/device_test.py\" '${input:sketch}' --expect '${input:expect}'",
       "problemMatcher": [] },
     { "label": "Sim prepare", "type": "shell",
-      "command": "${workspaceFolder}/tools/sim.sh ${input:sketch} --prepare-only", "problemMatcher": ["$gcc"] },
+      "command": "\"${workspaceFolder}/tools/sim.sh\" '${input:sketch}' --prepare-only", "problemMatcher": ["$gcc"] },
     // why: the Wokwi extension simulates sim/wokwi.toml (pick it once with "Wokwi: Select Config File");
     // "Sim prepare" points it at the chosen sketch and builds the chips first. Resolving
     // ${command:wokwi-vscode.start} runs "Wokwi: Start Simulator" (command id from the extension
@@ -22,7 +22,7 @@
     { "label": "Simulate", "type": "shell", "dependsOn": ["Sim prepare"],
       "command": "echo", "args": ["${command:wokwi-vscode.start}"], "problemMatcher": [] },
     { "label": "Sim test", "type": "shell",
-      "command": "${workspaceFolder}/tools/sim.sh ${input:sketch} ${workspaceFolder}/${input:scenario}",
+      "command": "\"${workspaceFolder}/tools/sim.sh\" '${input:sketch}' \"${workspaceFolder}/${input:scenario}\"",
       "problemMatcher": [] },
     { "label": "Host tests", "type": "shell",
       "command": "\"${workspaceFolder}/tools/.venv/bin/python\" -m unittest discover \"${workspaceFolder}/tools/tests\"",
