@@ -69,13 +69,26 @@ def parse_header(path):
     return [int(x, 16) for x in re.findall(r"0x[0-9a-fA-F]{1,4}", body)]
 
 
-def write_header(out_path, name, src, w, h, words):
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def regen_note(png_path, out_path, name):
+    """Return the one-line ``// Regenerable`` note with repo-relative paths."""
+    def rel(p):
+        return os.path.relpath(os.path.abspath(p), _REPO_ROOT).replace(os.sep, "/")
+    return ("// Regenerable (from repo root): python3 sketch/tools/png2rgb565.py "
+            "%s %s --name %s\n" % (rel(png_path), rel(out_path), name))
+
+
+def write_header(out_path, name, src, w, h, words, png_path=None):
     """Write ``static const uint16_t image_data_<name>[w*h]`` to out_path."""
     rows = [
         "    " + ", ".join("0x%04x" % v for v in words[y * w:(y + 1) * w])
         for y in range(h)
     ]
     with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+        if png_path:
+            f.write(regen_note(png_path, out_path, name))
         f.write(_BANNER.format(src=src, name=name, w=w, h=h))
         f.write("#pragma once\n#include <stdint.h>\n\n")
         f.write("static const uint16_t image_data_%s[%d] = {\n" % (name, w * h))
@@ -95,7 +108,8 @@ def main(argv=None):
     if not re.fullmatch(r"[A-Za-z_]\w*", args.name):
         ap.error("--name must be a valid C identifier")
     w, h, words = convert(args.png, args.bg)
-    write_header(args.header, args.name, os.path.basename(args.png), w, h, words)
+    write_header(args.header, args.name, os.path.basename(args.png), w, h, words,
+                 png_path=args.png)
     return 0
 
 

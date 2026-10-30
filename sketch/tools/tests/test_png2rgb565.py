@@ -56,6 +56,32 @@ class Png2Rgb565Test(unittest.TestCase):
                 self.assertEqual(len(data), w * h)
                 self.assertEqual(data, png2rgb565.parse_header(hdr))
 
+    def test_cli_regeneration_keeps_note_pragma_and_data(self):
+        """Regenerating a committed header via its own note reproduces note, pragma and data.
+
+        Only the lcd-image-converter banner (between the note and the pragma) differs.
+        """
+        import shutil
+        import subprocess
+        import png2rgb565
+
+        hdr = os.path.join(HEADER_DIRS[0], "icon_ble.h")
+        committed = open(hdr, encoding="utf-8").read()
+        note = committed.splitlines()[0]
+        repo = png2rgb565._REPO_ROOT
+        backup = hdr + ".bak"
+        shutil.copyfile(hdr, backup)
+        try:
+            args = note.split(": ", 1)[1].split()[1:]  # drop "python3"
+            subprocess.run([sys.executable] + args, cwd=repo, check=True)
+            regen = open(hdr, encoding="utf-8").read()
+            regen_words = png2rgb565.parse_header(hdr)
+        finally:
+            shutil.move(backup, hdr)
+        self.assertEqual(regen.splitlines()[0], note)
+        self.assertEqual(regen.count("#pragma once"), 1)
+        self.assertEqual(regen_words, png2rgb565.parse_header(hdr))
+
     def test_cli_output_roundtrips(self):
         import tempfile
         import png2rgb565
