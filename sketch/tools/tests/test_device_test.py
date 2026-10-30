@@ -2,6 +2,7 @@
 import contextlib
 import io
 import os
+import subprocess
 import sys
 import unittest
 from types import SimpleNamespace
@@ -108,6 +109,60 @@ class WaitForPortTest(unittest.TestCase):
                 contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(device_test.main(["sk"]), 2)
         cap.assert_not_called()
+
+
+class ResetBoardTest(unittest.TestCase):
+    def test_reset_runs_reset_script_with_port(self):
+        with mock.patch("subprocess.run") as run:
+            device_test.reset_board("/dev/ttyACM0")
+        cmd = run.call_args[0][0]
+        self.assertEqual(os.path.basename(cmd[0]), "reset.sh")
+        self.assertEqual(cmd[-1], "/dev/ttyACM0")
+
+    def test_reset_failure_raises_with_power_cycle_hint(self):
+        err = subprocess.CalledProcessError(1, "reset.sh")
+        with mock.patch("subprocess.run", side_effect=err):
+            with self.assertRaises(device_test.ResetError) as cm:
+                device_test.reset_board("/dev/ttyACM0")
+        self.assertIn("power-cycle", str(cm.exception))
+
+    def test_main_reset_failure_exits_1_with_message(self):
+        err = io.StringIO()
+        with mock.patch.object(device_test, "capture",
+                               side_effect=device_test.ResetError("reset failed; power-cycle")), \
+                contextlib.redirect_stderr(err):
+            self.assertEqual(device_test.main(["sk", "--port", "/dev/x", "--no-upload"]), 1)
+        self.assertIn("power-cycle", err.getvalue())
+
+
+class CaptureTest(unittest.TestCase):
+    def _capture(self):
+        ser = mock.MagicMock()
+        ser.__enter__.return_value = ser
+        ser.read.return_value = b"boot: smoke\n"
+        calls = []
+        with mock.patch.object(device_test, "reset_board", side_effect=lambda p: calls.append("reset")), \
+                mock.patch("serial.Serial", return_value=ser) as ctor:
+            device_test.capture("/dev/x", ["boot: smoke"], True, 1)
+        return ctor, ser, calls
+
+    def test_opens_with_dtr_high_rts_low_and_never_asserts_rts(self):
+        ctor, ser, calls = self._capture()
+        self.assertEqual(calls, ["reset"])
+        # why: port is created closed, flags set, then opened (DTR must be up at open time)
+        self.assertEqual(ser.port, "/dev/x")
+        ctor.assert_called_once()
+        self.assertIs(ser.dtr, True)
+        self.assertIs(ser.rts, False)
+        ser.open.assert_called_once()
+
+    def test_no_upload_path_resets_via_capture(self):
+        with mock.patch("subprocess.run") as run, \
+                mock.patch.object(device_test, "capture", return_value="ok") as cap, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(device_test.main(["sk", "--port", "/dev/x", "--no-upload"]), 0)
+        run.assert_not_called()
+        cap.assert_called_once()
 
 
 if __name__ == "__main__":

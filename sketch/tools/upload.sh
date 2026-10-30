@@ -14,5 +14,8 @@ port="${2:-$("$PY" "$TOOLS_DIR/find_port.py")}"
 # flashed to hardware; build and upload from the same, explicit device build dir.
 build_dir="$SKETCH_ROOT/.build/$name"
 M5DIAL_BUILD_DIR="$build_dir" "$TOOLS_DIR/build.sh" "$dir"
-exec arduino-cli upload --config-file "$ARDUINO_CLI_CONFIG" --fqbn "$M5DIAL_FQBN_FULL" \
+arduino-cli upload --config-file "$ARDUINO_CLI_CONFIG" --fqbn "$M5DIAL_FQBN_FULL" \
   --port "$port" --input-dir "$build_dir"
+# why: upload ends in an RTS hard reset, which strands the M5Dial in download mode or a
+# brownout loop; boot the fresh app with a watchdog reset instead.
+exec "$TOOLS_DIR/reset.sh" "$port"

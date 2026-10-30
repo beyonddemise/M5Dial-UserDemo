@@ -49,32 +49,54 @@ def evaluate(log: str, expects: List[str], forbids: List[str]) -> List[str]:
     return problems
 
 
-def _reset(ser: "serial.Serial") -> None:
-    """Pulse EN low through RTS to reboot the board (DTR kept low = run mode)."""
-    ser.dtr = False
-    ser.rts = True
-    time.sleep(0.1)
-    ser.rts = False
+class ResetError(RuntimeError):
+    """The esptool watchdog reset of the board failed."""
+
+
+def reset_board(port: str) -> None:
+    """Reboot the board into the app with an esptool watchdog reset (via ``reset.sh``).
+
+    Raises:
+        ResetError: reset.sh failed; the message suggests power-cycling the board.
+    """
+    # why: an RTS pulse (or esptool's default hard-reset) leaves the ESP32-S3 in ROM download
+    # mode or a brownout loop on the M5Dial; a watchdog reset boots the app cleanly. The
+    # esptool lookup and option spelling live in reset.sh, shared with upload.sh.
+    try:
+        subprocess.run([str(TOOLS / "reset.sh"), port], check=True)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        raise ResetError(f"esptool watchdog reset of {port} failed ({exc}); "
+                         "power-cycle the board (unplug/replug USB) and retry") from exc
 
 
 def capture(port: str, expects: List[str], stop_early: bool, timeout: float) -> str:
     """Reset the board and collect serial output for up to ``timeout`` seconds.
 
     With ``stop_early`` the capture ends as soon as all ``expects`` matched.
+
+    Raises:
+        ResetError: the board could not be reset.
     """
     chunks: List[str] = []
-    # why: USB-CDC re-enumerates after an upload/reset; retry opening briefly
+    reset_board(port)
+    # why: the watchdog reset re-enumerates USB-CDC; retry opening until the port is back
     deadline_open = time.time() + 10
     while True:
         try:
-            ser = serial.Serial(port, BAUD, timeout=0.2)
+            ser = serial.Serial(None, BAUD, timeout=0.2)
+            ser.port = port
+            # why: HWCDC only streams while DTR is asserted. RTS must stay low: on
+            # USB-Serial/JTAG, RTS asserted = chip reset. Set before open() so the very
+            # first open does not glitch the lines.
+            ser.dtr = True
+            ser.rts = False
+            ser.open()
             break
         except serial.SerialException:
             if time.time() > deadline_open:
                 raise
             time.sleep(0.3)
     with ser:
-        _reset(ser)
         end = time.time() + timeout
         while time.time() < end:
             data = ser.read(4096)
@@ -125,7 +147,7 @@ def main(argv: Optional[list] = None) -> int:
         except subprocess.CalledProcessError as exc:
             print(f"FAIL: upload failed (exit {exc.returncode})", file=sys.stderr)
             return 1
-        # why: the port node can change after the post-upload hard reset
+        # why: the port node can change after the post-upload reset
         time.sleep(1.5)
         if not args.port:
             port, code, msg = wait_for_port()
@@ -134,6 +156,9 @@ def main(argv: Optional[list] = None) -> int:
                 return code
     try:
         log = capture(port, args.expect, stop_early=not args.forbid, timeout=args.timeout)
+    except ResetError as exc:
+        print(f"FAIL: {exc}", file=sys.stderr)
+        return 1
     except serial.SerialException as exc:
         print(f"FAIL: serial port {port} unusable: {exc}", file=sys.stderr)
         return 1
