@@ -127,10 +127,15 @@ steps:
   # why 400 ms: the centre tap only opens once the 300 ms selector animation has finished
   - delay: 400ms
 
-  # --- touch the centre circle: opens the selected app, then back to the launcher
+  # --- touch the centre circle: opens the selected app (RFID_Test), a click quits back
   - set-control: { part-id: touch, control: x, value: 120 }
   - set-control: { part-id: touch, control: y, value: 120 }
   - set-control: { part-id: touch, control: touched, value: 1 }
-  - wait-serial: 'app: RfidTest not ported'
-  - wait-serial: 'launcher: ready'
+  - wait-serial: 'app: open RFID_Test'
+  - wait-serial: 'rfid: ready'
   - set-control: { part-id: touch, control: touched, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close RFID_Test'
+  - wait-serial: 'launcher: ready'
