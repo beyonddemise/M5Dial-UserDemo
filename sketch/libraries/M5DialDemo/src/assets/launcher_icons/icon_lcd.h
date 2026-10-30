@@ -1,4 +1,4 @@
-// Regenerable: sketch/tools/png2rgb565.py png/icon_lcd.png icon_lcd.h --name icon_lcd
+// Regenerable (from repo root): python3 sketch/tools/png2rgb565.py sketch/libraries/M5DialDemo/src/assets/png/icon_lcd.png sketch/libraries/M5DialDemo/src/assets/launcher_icons/icon_lcd.h --name icon_lcd
 // (reproduces this file's pixel data bit-exactly; see tests/test_png2rgb565.py)
 
 /*******************************************************************************
@@ -28,6 +28,7 @@
      uint8_t dataSize;
      } tImage;
 */
+#pragma once
 #include <stdint.h>
 
 

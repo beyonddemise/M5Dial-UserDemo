@@ -1,4 +1,4 @@
-// Regenerable: sketch/tools/png2rgb565.py png/icon_rfid.png icon_rfid.h --name icon_rfid
+// Regenerable (from repo root): python3 sketch/tools/png2rgb565.py sketch/libraries/M5DialDemo/src/assets/png/icon_rfid.png sketch/libraries/M5DialDemo/src/assets/launcher_icons/icon_rfid.h --name icon_rfid
 // (reproduces this file's pixel data bit-exactly; see tests/test_png2rgb565.py)
 
 /*******************************************************************************
@@ -28,6 +28,7 @@
      uint8_t dataSize;
      } tImage;
 */
+#pragma once
 #include <stdint.h>
 
 

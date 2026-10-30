@@ -77,7 +77,7 @@ def write_header(out_path, name, src, w, h, words):
     ]
     with open(out_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(_BANNER.format(src=src, name=name, w=w, h=h))
-        f.write("#include <stdint.h>\n\n")
+        f.write("#pragma once\n#include <stdint.h>\n\n")
         f.write("static const uint16_t image_data_%s[%d] = {\n" % (name, w * h))
         f.write(",\n".join(rows))
         f.write("\n};\n")

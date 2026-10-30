@@ -1,4 +1,4 @@
-// Regenerable: sketch/tools/png2rgb565.py png/icon_more.png icon_more.h --name icon_more
+// Regenerable (from repo root): python3 sketch/tools/png2rgb565.py sketch/libraries/M5DialDemo/src/assets/png/icon_more.png sketch/libraries/M5DialDemo/src/assets/launcher_icons/icon_more.h --name icon_more
 // (reproduces this file's pixel data bit-exactly; see tests/test_png2rgb565.py)
 
 /*******************************************************************************
@@ -28,6 +28,7 @@
      uint8_t dataSize;
      } tImage;
 */
+#pragma once
 #include <stdint.h>
 
 

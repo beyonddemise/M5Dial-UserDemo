@@ -1,4 +1,4 @@
-// Regenerable: sketch/tools/png2rgb565.py png/temp_demo_7.png temp_demo_7.h --name temp_demo_7
+// Regenerable (from repo root): python3 sketch/tools/png2rgb565.py sketch/libraries/M5DialDemo/src/assets/png/temp_demo_7.png sketch/libraries/M5DialDemo/src/assets/temp_demo_icons/temp_demo_7.h --name temp_demo_7
 // (reproduces this file's pixel data bit-exactly; see tests/test_png2rgb565.py)
 
 /*******************************************************************************
@@ -28,6 +28,7 @@
      uint8_t dataSize;
      } tImage;
 */
+#pragma once
 #include <stdint.h>
 
 
