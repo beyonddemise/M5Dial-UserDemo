@@ -26,3 +26,48 @@
 #ifndef M5DD_ENCODER_CW_SIGN
 #define M5DD_ENCODER_CW_SIGN (-1)
 #endif
+
+/**
+ * Factory-test entry check in the UserDemo sketch (hold the button > 1 s at boot).
+ * Defaults on, as the original build (CMakeLists.txt: add_definitions(-DENABLE_FACTORY_TEST));
+ * build with -DENABLE_FACTORY_TEST=0 to drop it.
+ */
+#ifndef ENABLE_FACTORY_TEST
+#define ENABLE_FACTORY_TEST 1
+#endif
+
+/**
+ * GUI fonts of the original (CMakeLists.txt add_definitions). Plain text macros: they only
+ * need M5GFX where they are used, so this header stays Arduino-free.
+ */
+#ifndef GUI_FONT_CN_BIG
+#define GUI_FONT_CN_BIG (&fonts::efontCN_24)
+#endif
+#ifndef GUI_FONT_CN_SMALL
+#define GUI_FONT_CN_SMALL (&fonts::efontCN_16_b)
+#endif
+
+/**
+ * Wi-Fi credentials of the factory test, from the sketch's git-ignored secrets.h if present
+ * (copy UserDemo/secrets.example.h), otherwise placeholders, so a fresh clone and CI build
+ * without it. M5DD_HAVE_SECRETS tells which case applied (1 = secrets.h found).
+ * why here, in a library header: arduino-cli puts the sketch folder on the include path of the
+ * sketch *and* of every library source (`-I<sketch dir>` comes first in the verbose build), so
+ * `__has_include("secrets.h")` finds the sketch's file from any translation unit. The host
+ * tests (-Isrc only) and the example sketches have none and get the placeholders.
+ */
+#if defined(__has_include)
+#if __has_include("secrets.h")
+#include "secrets.h"
+#define M5DD_HAVE_SECRETS 1
+#endif
+#endif
+#ifndef M5DD_HAVE_SECRETS
+#define M5DD_HAVE_SECRETS 0
+#endif
+#ifndef FACTORY_TEST_WIFI_SSID
+#define FACTORY_TEST_WIFI_SSID "your-ssid"
+#endif
+#ifndef FACTORY_TEST_WIFI_PASSWORD
+#define FACTORY_TEST_WIFI_PASSWORD "your-password"
+#endif

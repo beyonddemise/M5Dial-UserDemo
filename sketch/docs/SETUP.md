@@ -5,7 +5,7 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
 
 | Item | Pin |
 |---|---|
-| Core | `m5stack:esp32` 3.3.10 (FQBN `m5stack:esp32:m5stack_dial`, option `CDCOnBoot=cdc` so serial logs reach USB) |
+| Core | `m5stack:esp32` 3.3.10 (FQBN `m5stack:esp32:m5stack_dial`, options `CDCOnBoot=cdc` so serial logs reach USB, `FlashSize=8M,PartitionScheme=huge_app` for a 3 MB app, no OTA) |
 | Libraries | M5Dial 1.0.3, M5Unified 0.2.28, M5GFX 0.2.35, NimBLE-Arduino 2.5.2, Adafruit NeoPixel 1.15.5, lvgl 9.6.0 |
 | Python (venv) | pyserial 3.5, pillow 11.3.0, esptool 4.12.0, bleak 1.1.1 |
 | Simulation | wokwi-cli 0.29.1, wasi-sdk 34 |
@@ -37,6 +37,8 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    `upload.sh` refuses to run unless such a verified pair exists (`tools/check_backup.sh`).
    `tools/restore_flash.sh <file> --yes` writes it back (destructive; verifies size and checksum first).
 5. **Build:** `sketch/tools/build.sh sketch/examples/DialProbe` (output in `sketch/.build/DialProbe/`).
+   Optional, for the factory test's Wi-Fi: `cp sketch/UserDemo/secrets.example.h sketch/UserDemo/secrets.h`
+   and fill in your values (git-ignored). Without it UserDemo builds with placeholder credentials.
 6. **Upload:** `sketch/tools/upload.sh sketch/examples/DialProbe`. The port is auto-detected by USB
    VID:PID `303A:1001`. If none is found, plug the cable in, or hold the knob button while
    plugging in to enter download mode.
