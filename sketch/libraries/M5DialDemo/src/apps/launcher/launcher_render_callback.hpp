@@ -47,18 +47,7 @@ struct Icon_t
 
 /* Icon list */
 static std::array<Icon_t, ICON_NUM> icon_list;
-/* Icon color */
-static std::array<uint32_t, ICON_NUM> icon_color_list = {
-    0xFD5C4C,
-    0x577EFF,
-    0x03A964,
-    0x1AA198,
-    0xEB8429,
-    0x04A279,
-    0x008CD6,
-    0x5D7BA2
-    // 0x000000
-};
+/* Icon color: launcher_layout::appColor() (shared with the standalone sketches) */
 /* Icon tag */
 static std::array<std::string, ICON_NUM * 2> icon_tag_list = {
     "LCD", "TEST",

@@ -43,7 +43,8 @@ namespace MOONCAKE
          * selects it. Runs the chosen app in place until it destroys itself.
          *
          * Log lines: `launcher: ready`, `launcher: select <index> <name>`,
-         * `app: <name> not ported` (factory entries of apps not ported yet).
+         * `app: <name> not ported` (factory entries of apps not ported yet); ported apps log
+         * their own `app: open/close <Class>`.
          * User data: AppContext* (set with setUserData() before onSetup()).
          */
         class Launcher : public APP_BASE

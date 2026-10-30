@@ -326,3 +326,49 @@ The lookup works from a library header because arduino-cli passes `-I<sketch dir
 the sketch and for every library source alike (checked in a `--verbose` build). So every
 translation unit of one build sees the same answer. Sketches without a `secrets.h` (the
 examples) and the host tests (`-Isrc` only) get the placeholders.
+
+## Small apps, Tasks 7-10
+
+### Shared app helpers (`m5dd_begin.h`)
+
+Every ported app reads input the same way, so three helpers live next to `runStandalone`. They
+call the M5Dial API directly; they are not a HAL.
+
+- **`m5dd::initGui(app, ctx, icon, color, pixels)`:** what the launcher does before it opens an
+  app, for standalone sketches: canvas font `GUI_FONT_CN_BIG` (the original `HAL::init()` left
+  the canvas on efontCN_24 and every app's text relies on it), the 42x42 launcher icon in a
+  sprite, theme colour `launcher_layout::appColor(slot)`, then `getGui()->init()`. The colour
+  table moved from the launcher's render callback to `launcher_layout.h`, so both use one table.
+- **`m5dd::readDetentsWithClick(detent)`:** detent steps (clockwise positive) plus the original
+  HAL's knob click (6 kHz next / 7 kHz previous, 20 ms). Upstream played the click from the
+  HAL's encoder-moved callback, which fired from `wasMoved()`, so it sounded only in apps that
+  polled the encoder (not in RTC_Test). The port matches that: only apps that read the knob
+  call this helper. The tone values live in `ui_tones.h`, shared with the launcher (which keeps
+  its own press/hold loop for the selector animation).
+- **`m5dd::buttonClicked()`:** the quit gesture. True once per press: on `BtnA.wasPressed()` it
+  plays the HAL's 2 kHz press tone, then waits for the release, calling `M5Dial.update()`
+  (Review Focus 1). Upstream checked the level (`!btn.read()`); the edge matches the launcher
+  and cannot quit an app at once if the button is still held when it opens.
+  `wasPressed()` is true for one `M5Dial.update()` only, so a press that starts and ends inside
+  another blocking wait of the app (e.g. the touch-release loops of LCD_Test and TempDemo) is
+  consumed there and does not quit.
+
+Every app logs `app: open <Class>` in `onCreate()` and `app: close <Class>` in `onDestroy()`,
+with `<Class>` = `setAppName()` = the C++ class name.
+
+### LCD test (`LCD_Test`, Task 7)
+
+| Original (`_data.hal->...`)                              | Port                                                          |
+|----------------------------------------------------------|---------------------------------------------------------------|
+| `HAL::HAL*` user data                                    | `AppContext*` (`getUserData()`)                               |
+| `encoder.wasMoved(true)` + `getDirection() < 1` → next, `delay(100)` | `m5dd::readDetentsWithClick(_detent)` → `goPages(steps)` (`lcd_test_pages::step`), no delay |
+| `!encoder.btn.read()` + `while (!btn.read()) delay(5)`   | `m5dd::buttonClicked()`                                       |
+| `tp.isTouched()` + `tp.update()` + `getTouchPointBuffer()` | `M5Dial.Touch.getDetail()`: `isPressed()`, `x`, `y`        |
+| `while (tp.isTouched()) delay(5)` in `onCreate`          | same loop on `getDetail().isPressed()` with `M5Dial.update()` |
+| `_log("onCreate")`, `printf("render page: %d")`          | `app: open LCD_Test`, `lcd: pattern <n>` (on open and every change) |
+
+- `goNextPage`/`goLastPage` became `goPages(detents)`; the wrap logic is in `lcd_test_pages.h`
+  (host-tested). Several detents in one frame each move one page.
+- The original `delay(100)` after a page change throttled the per-count `wasMoved()`. The
+  detent tracker already gives one step per click, and the interrupt-driven counter loses
+  nothing while the app draws, so the delay is gone.

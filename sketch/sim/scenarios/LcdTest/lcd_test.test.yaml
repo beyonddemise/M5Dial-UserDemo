@@ -1,0 +1,48 @@
+# LcdTest on the virtual M5Dial: open, knob pages (both directions, wrap), touch, quit - all in
+# ONE Wokwi session (one session per sketch keeps CI minutes down).
+# Run: tools/sim.sh examples/LcdTest sim/scenarios/LcdTest/lcd_test.test.yaml
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, touch = ft3267, enc = encoder chip on
+# GPIO41 (A) / GPIO40 (B). `enc.steps` emits that many detents (positive = clockwise), 0 re-arms.
+# Pages (lcd_test_pages.h): 0 info, 1..5 colour fills, 6 test page; wrapping both ways.
+name: 'LcdTest: pages and quit'
+version: 1
+steps:
+  - wait-serial: 'boot: LcdTest'
+  - wait-serial: 'app: open LCD_Test'
+  - wait-serial: 'lcd: pattern 0'
+
+  # --- clockwise = next page (Review Focus 3)
+  # why edgeIntervalUs 40 ms: a slow, unambiguous turn; checks direction and one step per detent
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'lcd: pattern 1'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 10ms
+
+  # --- counter-clockwise back to 0, then once more: wraps to the test page 6
+  - set-control: { part-id: enc, control: steps, value: -1 }
+  - wait-serial: 'lcd: pattern 0'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 10ms
+  - set-control: { part-id: enc, control: steps, value: -1 }
+  - wait-serial: 'lcd: pattern 6'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+
+  # --- touch draws a dot (no log line)
+  # why no frame assertion yet: the custom gc9a01 chip has no Wokwi framebuffer (no screenshots);
+  # the check is `expect-chip-output: 'gc9a01: frame fnv=<hash>'` (frameLog=1) before the
+  # release, and the known-good hash must come from a real sim run (Wokwi quota exhausted;
+  # tracked in #19 - never hand-computed).
+  - set-control: { part-id: touch, control: x, value: 60 }
+  - set-control: { part-id: touch, control: y, value: 120 }
+  - set-control: { part-id: touch, control: touched, value: 1 }
+  - delay: 100ms
+  - set-control: { part-id: touch, control: touched, value: 0 }
+
+  # --- button click quits (Review Focus 1: the release wait must call M5Dial.update())
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 300ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close LCD_Test'
+  - wait-serial: 'app: restart'
