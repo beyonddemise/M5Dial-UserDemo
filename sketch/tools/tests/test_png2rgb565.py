@@ -86,7 +86,7 @@ class Png2Rgb565Test(unittest.TestCase):
             for a in (args[0], args[1], args[2]):
                 self.assertFalse(os.path.isabs(a) or ".." in a.split("/"),
                                  "note path not repo-relative: %r" % a)
-            args = [os.path.join(tmp, a) if i in (1, 2) else a for i, a in enumerate(args)]
+            # Validated relative paths resolve inside cwd=tmp, so the output is the tmp header.
             subprocess.run([sys.executable, *args], cwd=tmp, check=True)
             out = os.path.join(tmp, rel_assets, "launcher_icons", "icon_ble.h")
             regen = open(out, encoding="utf-8").read()
