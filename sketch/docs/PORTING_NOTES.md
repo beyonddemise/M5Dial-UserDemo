@@ -641,3 +641,55 @@ Wiring, controls and the summary: `docs/FACTORY_TEST_JIG.md`.
 - **Entry:** `UserDemo.ino` runs `FactoryTest` after the boot hold (above). The original
   launcher had no factory-test entry, so the launcher is unchanged. The `launcher.test.yaml`
   scenario no longer holds the button at boot (that would now enter the factory test).
+
+## LVGL starter, Task 16
+
+### LvglDemo (`examples/LvglDemo`)
+
+A new sketch, not a port. Upstream ran LVGL 8 (`main/hal/lvgl/porting/`) only for the
+More menu's widgets, benchmark and stress demos, which the port drops (D3); its flush pushed
+native RGB565 (`pushPixels(..., true)`), the byte order used here too. LVGL 9.6 (`LIB_LVGL`),
+an arc 0..100 the knob drives, a centred value label, a button that toggles the arc colour.
+Logs `lvgl: ready`, `lvgl: value=<n>` on every change and `lvgl: colour=blue|orange` on every
+click.
+
+- **`lv_conf.h` flags (`tools/build.sh`):** without a define, LVGL 9 includes
+  `../../../../lv_conf.h` relative to `include/lvgl/config/`, i.e. `sketch/libraries/lv_conf.h`,
+  one file shared by every sketch. Instead, `build.sh` checks for `<sketch dir>/lv_conf.h` and,
+  only if it exists, adds `-DLV_CONF_INCLUDE_SIMPLE "-I<sketch dir>"` to both
+  `compiler.c.extra_flags` (LVGL is C) and `compiler.cpp.extra_flags`. Both are empty in the
+  core's `platform.txt` (3.3.10) and unset in `boards.txt`, so nothing is clobbered. Sketches
+  without `lv_conf.h` build with exactly the same command line as before
+  (`tools/tests/test_build_partitions.py`), and they never include `lvgl.h`, so arduino-cli does
+  not compile LVGL for them at all.
+- **`M5DIAL_EXTRA_FLAGS` (deviation):** `sim.sh` used to pass
+  `--build-property compiler.cpp.extra_flags=-DM5DD_SIM` itself; a second value for the same key
+  replaces the first, so the sim build of LvglDemo would have lost either `-DM5DD_SIM` or the
+  `lv_conf.h` flags. `sim.sh` now sets `M5DIAL_EXTRA_FLAGS=-DM5DD_SIM` and `build.sh` merges it
+  with the `lv_conf.h` flags for C and C++ (so `-DM5DD_SIM` now reaches C files too; no C file
+  uses it). `gen_compile_commands.sh` now calls `build.sh --only-compilation-database`, so the
+  IntelliSense database has the same flags as the build.
+- **Short `lv_conf.h`:** only the options this sketch sets (16 bpp, heap, no OS, no LVGL log,
+  Montserrat 28, dark theme); `lv_conf_internal.h` supplies every other default.
+- **Byte order:** LVGL renders RGB565 as native little-endian `uint16_t`. M5GFX's
+  `pushImage(const uint16_t*)` treats the data as byte-swapped (`swap565_t`) unless
+  `setSwapBytes(true)`; the flush passes `reinterpret_cast<const lgfx::rgb565_t*>(px_map)`,
+  which means native RGB565 whatever the swap flag, and M5GFX converts to the panel's order while
+  it copies. No `LV_COLOR_FORMAT_RGB565_SWAPPED`, no swap pass in LVGL.
+- **Memory:** no 240x240 canvas (115 KB). `m5dd::begin(name)` is a new canvas-less overload of
+  `m5dd::begin(name, canvas)` (same bring-up, sim shim, RFID probe and log lines). LVGL renders
+  into one static 240x24 px partial buffer (11.25 KB, `.bss`, aligned to `LV_DRAW_BUF_ALIGN`),
+  flushed synchronously, so no second buffer. LVGL's heap is its builtin TLSF allocator over a
+  static 64 KB array (`LV_MEM_SIZE`, `.bss`), not the ESP heap. The build reports 114 KB of
+  global variables (of 320 KB), 77 KB more than DialProbe's 37 KB: 64 KB heap + 11.25 KB buffer
+  + LVGL's own statics; DialProbe in turn allocates its 115 KB canvas from the heap at boot.
+- **Input:** encoder indev `enc_diff` = `EncoderDetent::update(dialEncoder.read())` (clockwise
+  +1 = `LV_KEY_RIGHT` = value up), pressed = `M5Dial.BtnA.isPressed()`; pointer indev from
+  `M5Dial.Touch.getDetail()`. `loop()` calls `M5Dial.update()` once, then `lv_timer_handler()`,
+  then waits at most 5 ms. Tick: `lv_tick_set_cb(millis)` (LVGL 9's documented time source).
+  The arc starts focused in edit mode; a knob press leaves edit mode, so the knob can then focus
+  the button.
+- **Not verified yet:** `sim/scenarios/LvglDemo/knob.test.yaml` (boot, `lvgl: ready`, CW x5 →
+  `value=5`, CCW → `value=4`) was written but not run (Wokwi CI quota), and the sketch has not
+  run on the device (offline). The colours and the RGB565 byte order are therefore unchecked on
+  a real panel.

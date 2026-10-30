@@ -1,0 +1,27 @@
+# LvglDemo on the virtual M5Dial: the knob drives the LVGL arc through the encoder indev.
+# Run: tools/sim.sh examples/LvglDemo sim/scenarios/LvglDemo/knob.test.yaml
+#
+# Parts (sim/diagram.json): enc = encoder chip on GPIO41 (A) / GPIO40 (B). `enc.steps` emits
+# that many detents (positive = clockwise), 0 re-arms.
+# The arc starts at 0, focused and in edit mode, so each detent changes it by exactly 1
+# (EncoderDetent -> lv_indev_data_t.enc_diff -> LV_KEY_RIGHT/LEFT -> lv_arc +-1).
+name: 'LvglDemo: knob drives the arc'
+version: 1
+steps:
+  - wait-serial: 'boot: LvglDemo'
+  - wait-serial: 'lvgl: ready'
+
+  # --- clockwise x5: 0 -> 5, one value line per detent (Review Focus 3: clockwise = up)
+  # why edgeIntervalUs 40 ms: 160 ms per detent, several LVGL indev reads (every 33 ms) per
+  # detent, so each detent is its own value line
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: 5 }
+  - wait-serial: 'lvgl: value=1'
+  - wait-serial: 'lvgl: value=5'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 200ms
+
+  # --- counter-clockwise x1: 5 -> 4
+  - set-control: { part-id: enc, control: steps, value: -1 }
+  - wait-serial: 'lvgl: value=4'
+  - set-control: { part-id: enc, control: steps, value: 0 }

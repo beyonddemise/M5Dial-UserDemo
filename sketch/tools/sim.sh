@@ -49,10 +49,12 @@ SIM_DIR="$SKETCH_ROOT/sim"
 # 1. firmware
 # why: SIM_DEBUG_LEVEL (0-5, diagnostics only - never set by scenarios/CI checks) turns on
 # ESP-IDF/M5GFX logging, e.g. M5GFX's "[Autodetect] read cmd:04 = ..." line.
-# why: -DM5DD_SIM marks the sim build; the code it enables is listed in docs/PORTING_NOTES.md
-build_args=(--build-property "compiler.cpp.extra_flags=-DM5DD_SIM")
+# why: -DM5DD_SIM marks the sim build; the code it enables is listed in docs/PORTING_NOTES.md.
+# Passed via M5DIAL_EXTRA_FLAGS so build.sh merges it with a sketch's lv_conf.h flags.
+build_args=()
 [ -n "${SIM_DEBUG_LEVEL:-}" ] && build_args+=(--build-property "build.code_debug=$SIM_DEBUG_LEVEL")
-M5DIAL_BUILD_DIR="$SKETCH_ROOT/.build/sim/$name" "$TOOLS_DIR/build.sh" "$sketch_dir" "${build_args[@]}" >/dev/null
+M5DIAL_EXTRA_FLAGS="-DM5DD_SIM" M5DIAL_BUILD_DIR="$SKETCH_ROOT/.build/sim/$name" \
+  "$TOOLS_DIR/build.sh" "$sketch_dir" ${build_args[@]+"${build_args[@]}"} >/dev/null
 out_dir="$SKETCH_ROOT/.build/sim-out/$name"
 mkdir -p "$out_dir"
 
