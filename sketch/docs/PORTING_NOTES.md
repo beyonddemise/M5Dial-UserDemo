@@ -327,7 +327,7 @@ the sketch and for every library source alike (checked in a `--verbose` build). 
 translation unit of one build sees the same answer. Sketches without a `secrets.h` (the
 examples) and the host tests (`-Isrc` only) get the placeholders.
 
-## Small apps, Tasks 7-11
+## Small apps, Tasks 7-12
 
 ### Shared app helpers (`m5dd_begin.h`)
 
@@ -450,3 +450,32 @@ with `<Class>` = `setAppName()` = the C++ class name.
   25 ms receive timeout over I2C; polling every frame would spend most of the loop there.
 - The UID line uses `GUI_FONT_CN_SMALL`: a 7-byte UID is 20 characters, too wide for the round
   panel in efontCN_24.
+
+### Wi-Fi scan (`WiFi_Scan`, Task 12)
+
+| Original (`_data.hal->...`, ESP-IDF)                     | Port                                                          |
+|----------------------------------------------------------|---------------------------------------------------------------|
+| `HAL::HAL*` user data                                    | `AppContext*` (`getUserData()`)                               |
+| `WIFI_COMMON_TEST::SCAN::scan()` in `onCreate`: NVS + netif + event loop + `esp_wifi_init`, blocking `esp_wifi_scan_start`, then everything torn down | `WiFi.mode(WIFI_STA)` in `onCreate`, `WiFi.scanNetworks(true)`; `WiFi.scanComplete()` polled in `onRunning()` |
+| `esp_wifi_scan_get_ap_num` then `..._get_ap_records` (fix d49e20e) | count first: `scanComplete()` returns it, then `SSID(i)` / `RSSI(i)` for `i < min(count, 10)`; the core's scan-done handler itself reads the count before the records |
+| list text `i. (rssi) ssid\n`, 10 entries (`DEFAULT_SCAN_LIST_SIZE`) | same, in `wifi_list.h` (host-tested); hidden SSIDs drawn as `(hidden)`, SSIDs over 20 bytes cut on a UTF-8 boundary + `...` |
+| knob: `25 - delta_time / 8` px per move, at least 1, overshoot anim 600 ms | same (`wifi_list::scrollIncrement/scrollOffset`), clockwise = later entries (Review Focus 3) |
+| `!encoder.btn.read()` + hold loop -> quit                | `m5dd::buttonClicked()` -> quit (unchanged behaviour)         |
+| no rescan                                                | **new:** a touch on the screen rescans once the finger is lifted |
+| `onDestroy`: log only (Wi-Fi was already torn down per scan) | `WiFi.scanDelete()` + `WiFi.mode(WIFI_OFF)` (stops and deinits the driver), then `wifi: heap=<free internal>` |
+| `_log("get wifi num: %d")`, `printf(result)`             | `app: open WiFi_Scan`, `wifi: scan`, `wifi: ap_count=<n>`, `wifi: <rssi> <ssid>` per listed AP, `wifi: scan failed` (warning), `wifi: heap=<n>`, `app: close WiFi_Scan` |
+
+- **Rescan on touch, not on the button:** upstream the button click quits and nothing rescans.
+  The plan asked for "a press triggers a rescan"; giving the button press to the rescan would
+  have needed a long press to quit, unlike every other app. So the button keeps quitting and a
+  touch rescans (scenario `scan.test.yaml`). Touches during a scan are ignored.
+- **Asynchronous scan:** the original blocked `onCreate()` for the whole scan, so the app could
+  not quit until it finished. The port shows "Scanning..." and keeps the button responsive;
+  knob turns during a scan are dropped.
+- **Heap:** the scan records are freed with `WiFi.scanDelete()` as soon as the list text is
+  built; `WIFI_OFF` on close returns the driver's memory, so repeated open/close does not leak.
+  `wifi: heap=` is logged after `WIFI_OFF` for the Task 14 MemSoak test. The list itself is at
+  most 10 lines of text.
+- No credentials: a scan never connects, so the app does not include `secrets.h`.
+- Wokwi always reports one AP, `Wokwi-GUEST`; the scenario waits for it to prove `ap_count >= 1`
+  (`wait-serial` matches text, not numbers).

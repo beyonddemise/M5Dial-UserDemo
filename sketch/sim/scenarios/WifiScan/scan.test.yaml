@@ -1,0 +1,40 @@
+# WifiScan on the virtual M5Dial: first scan lists Wokwi's simulated AP, a touch rescans, a
+# button click quits (Wi-Fi off, heap logged) - in ONE Wokwi session (one session per sketch
+# keeps CI minutes down).
+# Run: tools/sim.sh examples/WifiScan sim/scenarios/WifiScan/scan.test.yaml
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, touch = ft3267. Wokwi's ESP32 always
+# sees one access point, `Wokwi-GUEST` (open, channel 6); no wokwi.toml change is needed.
+# why touch for the rescan, not the button: upstream the button click quits (and nothing
+# rescans); the port keeps that and adds the rescan on a touch (docs/PORTING_NOTES.md,
+# "Wi-Fi scan").
+name: 'WifiScan: scan, rescan and quit'
+version: 1
+steps:
+  - wait-serial: 'boot: WifiScan'
+  - wait-serial: 'app: open WiFi_Scan'
+
+  # --- first scan: a count line, then one line per listed AP
+  # why the SSID wait proves ap_count >= 1: wait-serial matches text, not numbers; the
+  # `wifi: <rssi> <ssid>` lines follow `ap_count=` and exist only for listed APs
+  - wait-serial: 'wifi: scan'
+  - wait-serial: 'wifi: ap_count='
+  - wait-serial: ' Wokwi-GUEST'
+
+  # --- touch anywhere: rescan once the finger is lifted -> a second count line
+  - set-control: { part-id: touch, control: x, value: 120 }
+  - set-control: { part-id: touch, control: y, value: 120 }
+  - set-control: { part-id: touch, control: touched, value: 1 }
+  - delay: 100ms
+  - set-control: { part-id: touch, control: touched, value: 0 }
+  - wait-serial: 'wifi: scan'
+  - wait-serial: 'wifi: ap_count='
+  - wait-serial: ' Wokwi-GUEST'
+
+  # --- button click quits (Review Focus 1: the release wait must call M5Dial.update())
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 300ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'wifi: heap='
+  - wait-serial: 'app: close WiFi_Scan'
+  - wait-serial: 'app: restart'
