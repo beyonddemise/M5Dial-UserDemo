@@ -456,9 +456,9 @@ with `<Class>` = `setAppName()` = the C++ class name.
 | Original (`_data.hal->...`, ESP-IDF)                     | Port                                                          |
 |----------------------------------------------------------|---------------------------------------------------------------|
 | `HAL::HAL*` user data                                    | `AppContext*` (`getUserData()`)                               |
-| `WIFI_COMMON_TEST::SCAN::scan()` in `onCreate`: NVS + netif + event loop + `esp_wifi_init`, blocking `esp_wifi_scan_start`, then everything torn down | `WiFi.mode(WIFI_STA)` in `onCreate`, `WiFi.scanNetworks(true)`; `WiFi.scanComplete()` polled in `onRunning()` |
+| `WIFI_COMMON_TEST::SCAN::scan()` in `onCreate`: NVS + netif + event loop + `esp_wifi_init`, blocking `esp_wifi_scan_start(NULL, ...)` (hidden APs off), then everything torn down | `WiFi.mode(WIFI_STA)` in `onCreate`, `WiFi.scanNetworks(true, true)` (hidden APs listed); `WiFi.scanComplete()` polled in `onRunning()` |
 | `esp_wifi_scan_get_ap_num` then `..._get_ap_records` (fix d49e20e) | count first: `scanComplete()` returns it, then `SSID(i)` / `RSSI(i)` for `i < min(count, 10)`; the core's scan-done handler itself reads the count before the records |
-| list text `i. (rssi) ssid\n`, 10 entries (`DEFAULT_SCAN_LIST_SIZE`) | same, in `wifi_list.h` (host-tested); hidden SSIDs drawn as `(hidden)`, SSIDs over 20 bytes cut on a UTF-8 boundary + `...` |
+| list text `i. (rssi) ssid\n`, 10 entries (`DEFAULT_SCAN_LIST_SIZE`) | same, in `wifi_list.h` (host-tested); hidden SSIDs drawn as `(hidden)`, SSIDs over 20 bytes cut on a UTF-8 boundary + `...`; control bytes in an SSID become `?` in the list and in the `wifi:` log line (`wifi_list::sanitizeSsid`) |
 | knob: `25 - delta_time / 8` px per move, at least 1, overshoot anim 600 ms | same (`wifi_list::scrollIncrement/scrollOffset`), clockwise = later entries (Review Focus 3) |
 | `!encoder.btn.read()` + hold loop -> quit                | `m5dd::buttonClicked()` -> quit (unchanged behaviour)         |
 | no rescan                                                | **new:** a touch on the screen rescans once the finger is lifted |

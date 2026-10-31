@@ -40,7 +40,8 @@ void WiFi_Scan::_start_scan()
 
     // why async: the original blocked onCreate() for the whole scan (~2-4 s), so the button
     // could not quit meanwhile; scanComplete() is polled from onRunning() instead
-    int16_t started = WiFi.scanNetworks(/*async*/ true);
+    // why show_hidden (upstream's NULL scan config left it off): lists hidden APs as "(hidden)"
+    int16_t started = WiFi.scanNetworks(/*async*/ true, /*show_hidden*/ true);
     _data.scanning = (started == WIFI_SCAN_RUNNING);
     if (!_data.scanning)
     {
@@ -74,7 +75,7 @@ void WiFi_Scan::_poll_scan()
         {
             String ssid = WiFi.SSID(i);
             int32_t rssi = WiFi.RSSI(i);
-            M5_LOGI("wifi: %d %s", (int)rssi, ssid.c_str());
+            M5_LOGI("wifi: %d %s", (int)rssi, wifi_list::sanitizeSsid(ssid.c_str()).c_str());
             _data.wifi_scan_result += wifi_list::formatLine(i, rssi, ssid.c_str());
         }
     }

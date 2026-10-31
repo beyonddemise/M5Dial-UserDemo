@@ -32,7 +32,23 @@ inline int listedCount(int scanResult) {
 }
 
 /**
- * SSID as the list draws it: "(hidden)" for an empty one; one longer than MAX_SSID_BYTES is
+ * SSID with every ASCII control byte (0x00-0x1F, 0x7F) replaced by '?', for the serial log and
+ * the list.
+ * why: an AP may broadcast any 32 bytes; a newline or escape sequence would forge extra log
+ * lines or list rows. Bytes >= 0x80 are kept so UTF-8 SSIDs still read correctly.
+ * @param ssid NUL-terminated SSID; may be nullptr (gives "")
+ */
+inline std::string sanitizeSsid(const char* ssid) {
+    std::string s(ssid == nullptr ? "" : ssid);
+    for (char& c : s) {
+        unsigned char u = static_cast<unsigned char>(c);
+        if (u < 0x20 || u == 0x7F) c = '?';
+    }
+    return s;
+}
+
+/**
+ * SSID as the list draws it: sanitizeSsid() applied, "(hidden)" for an empty one; one longer than MAX_SSID_BYTES is
  * cut and ends in "...", so the line fits the round panel in efontCN_16_b.
  * why bytes, cut on a character boundary: SSIDs are up to 32 bytes of (usually) UTF-8; cutting
  * inside a multi-byte sequence would draw a broken glyph.
@@ -40,7 +56,7 @@ inline int listedCount(int scanResult) {
  */
 inline std::string displaySsid(const char* ssid) {
     if (ssid == nullptr || ssid[0] == '\0') return "(hidden)";
-    std::string s(ssid);
+    std::string s = sanitizeSsid(ssid);
     if (s.size() <= MAX_SSID_BYTES) return s;
     static const char ELLIPSIS[] = "...";
     size_t cut = MAX_SSID_BYTES - (sizeof(ELLIPSIS) - 1);

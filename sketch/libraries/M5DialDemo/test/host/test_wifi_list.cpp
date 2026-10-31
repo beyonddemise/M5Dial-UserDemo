@@ -68,3 +68,16 @@ HOST_TEST(wifi_clockwise_scrolls_the_list_up_to_later_entries) {
     HT_EQ(10 + 2, scrollOffset(10, -2, 1000));
     HT_EQ(0, scrollOffset(0, 0, 0));
 }
+
+HOST_TEST(wifi_ssid_control_characters_are_replaced) {
+    // an AP can broadcast any 32 bytes: a newline would split the log line and the list row
+    HT_EQ(0, std::strcmp("evil?0. (-1) fake", sanitizeSsid("evil\n0. (-1) fake").c_str()));
+    HT_EQ(0, std::strcmp("a?b?c?", sanitizeSsid("a\x1b" "b\x7f" "c\r").c_str()));
+    HT_EQ(0, std::strcmp("caf\xC3\xA9", sanitizeSsid("caf\xC3\xA9").c_str()));  // UTF-8 kept
+    HT_EQ(0, std::strcmp("", sanitizeSsid(nullptr).c_str()));
+}
+
+HOST_TEST(wifi_list_line_never_contains_an_extra_newline) {
+    std::string line = formatLine(0, -50, "two\nrows");
+    HT_EQ(0, std::strcmp("0. (-50) two?rows\n", line.c_str()));
+}
