@@ -66,6 +66,8 @@ namespace MOONCAKE
                 void _start_scan();
                 /** @brief If the scan has finished: log, build the list text, free the results */
                 void _poll_scan();
+                /** @brief Show the new list text from the top (slide-in), dropping stale knob turns */
+                void _show_list();
 
             public:
                 WIFI_SCAN::Data_t _data;

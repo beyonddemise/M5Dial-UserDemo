@@ -47,6 +47,9 @@ void WiFi_Scan::_start_scan()
     {
         M5_LOGW("wifi: scan failed");
         _data.wifi_scan_result = "Scan failed\n";
+        // why: a touch rescan may follow a scroll; the stale offset could place the short
+        // failure text above the viewport
+        _show_list();
     }
 }
 
@@ -84,6 +87,12 @@ void WiFi_Scan::_poll_scan()
     // the text is built; no PSRAM, and the 115 KB canvas is resident
     WiFi.scanDelete();
 
+    _show_list();
+}
+
+
+void WiFi_Scan::_show_list()
+{
     // why: knob turns made while "Scanning..." was shown would otherwise land as one jump
     _detent.reset(dialEncoder.read());
 
