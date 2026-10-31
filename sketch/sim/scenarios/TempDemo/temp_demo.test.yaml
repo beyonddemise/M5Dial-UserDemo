@@ -1,0 +1,51 @@
+# TempDemo on the virtual M5Dial: open, knob changes the set-point (both ways, top clamp),
+# touch presses SET, quit - in ONE Wokwi session (one session per sketch keeps CI minutes down).
+# Run: tools/sim.sh examples/TempDemo sim/scenarios/TempDemo/temp_demo.test.yaml
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, touch = ft3267, enc = encoder chip on
+# GPIO41 (A) / GPIO40 (B). `enc.steps` emits that many detents (positive = clockwise), 0 re-arms.
+# Set-point (temp_demo_target.h): 19..27 C, starts at 22, clamped (no wrap).
+name: 'TempDemo: set-point, touch and quit'
+version: 1
+steps:
+  - wait-serial: 'boot: TempDemo'
+  - wait-serial: 'app: open TempDemo'
+  - wait-serial: 'temp: target=22'
+  - wait-serial: 'temp: frame'
+
+  # --- clockwise = warmer (Review Focus 3)
+  # why edgeIntervalUs 40 ms: a slow, unambiguous turn; checks direction and one step per detent
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'temp: target=23'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 10ms
+  - set-control: { part-id: enc, control: steps, value: -2 }
+  - wait-serial: 'temp: target=22'
+  - wait-serial: 'temp: target=21'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 10ms
+
+  # --- touch presses SET (frame on press and on release)
+  # why before the clamp leg: every step logs `temp: frame` then `temp: target=`, so right after
+  # `target=21` no frame line is pending and the next one comes from the touch; clamped steps
+  # past 27 log frames without a target line, which would satisfy these waits by themselves.
+  - set-control: { part-id: touch, control: x, value: 120 }
+  - set-control: { part-id: touch, control: y, value: 200 }
+  - set-control: { part-id: touch, control: touched, value: 1 }
+  - wait-serial: 'temp: frame'
+  - set-control: { part-id: touch, control: touched, value: 0 }
+  - wait-serial: 'temp: frame'
+
+  # --- top clamp: 21 + 10 detents (2 ms per edge) stops at 27
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 2000 }
+  - set-control: { part-id: enc, control: steps, value: 10 }
+  - wait-serial: 'temp: target=27'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+
+  # --- button click quits (Review Focus 1: the release wait must call M5Dial.update())
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 300ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close TempDemo'
+  - wait-serial: 'app: restart'
