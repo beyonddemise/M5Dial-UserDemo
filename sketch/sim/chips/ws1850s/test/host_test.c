@@ -19,7 +19,7 @@ static const char *pin_names[NPINS] = {"IRQ", "RST", "SCL", "SDA"};
 static uint32_t level[NPINS] = {0, HIGH, 0, 0};
 static uint32_t mode[NPINS];
 static i2c_config_t i2c_cfg;
-static const char *attr_names[] = {"version", "address", "sak", "atqa", "debug", "card_present", "uid0", "uid1", "uid2", "uid3"};
+static const char *attr_names[] = {"version", "address", "sak", "atqa", "debug", "cardPresent", "uid0", "uid1", "uid2", "uid3"};
 enum { NATTR = 10, A_PRESENT = 5, A_UID0 = 6 };
 static uint32_t attr_val[NATTR];
 

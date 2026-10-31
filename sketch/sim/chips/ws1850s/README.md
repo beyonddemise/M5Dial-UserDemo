@@ -21,7 +21,7 @@ part's controls, so automation scenarios can present cards with `set-control`.
 
 | Control        | Range | Meaning |
 |----------------|-------|---------|
-| `card_present` | 0/1   | a card is in the field |
+| `cardPresent`  | 0/1   | a card is in the field |
 | `uid0`..`uid3` | 0-255 | the card's 4-byte UID (single size, cascade level 1) |
 
 Removing the card (or changing its UID) resets it to IDLE, as when a real card leaves the field.
