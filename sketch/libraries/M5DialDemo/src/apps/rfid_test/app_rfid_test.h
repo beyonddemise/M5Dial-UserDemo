@@ -16,6 +16,7 @@
 #include "../../app_context.h"
 #include "../../mooncake/app.h"
 #include "gui/gui_rfid_test.h"
+#include "poll_timer.h"
 
 
 namespace MOONCAKE
@@ -24,12 +25,17 @@ namespace MOONCAKE
     {
         namespace APP_RFID_TEST
         {
+            // why a poll period: with no card in the field every PICC_IsNewCardPresent() waits
+            // for the reader's 25 ms receive timeout over I2C; polling every frame would spend
+            // most of the loop there. 100 ms still feels instant and keeps the button responsive.
+            constexpr uint32_t POLL_MS = 100;  ///< minimum time between two card polls
+
             /** @brief RFID test runtime state */
             struct Data_t
             {
                 AppContext* ctx = nullptr;  ///< host context (canvas)
                 bool reader = false;        ///< m5dd::rfidPresent() at open: M5Dial.Rfid usable
-                uint32_t next_poll_ms = 0;  ///< millis() of the next card poll
+                poll_timer::PollTimer poll{POLL_MS};  ///< card-poll throttle
             };
         }
 

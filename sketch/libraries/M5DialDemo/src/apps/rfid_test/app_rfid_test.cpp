@@ -23,10 +23,6 @@
 namespace {
 constexpr uint16_t SCAN_TONE_HZ = 4000;  ///< original buzz.tone(4000, ...)
 constexpr uint32_t SCAN_TONE_MS = 30;    ///< plan value (original 100 ms)
-// why a poll period: with no card in the field every PICC_IsNewCardPresent() waits for the
-// reader's 25 ms receive timeout over I2C; polling every frame would spend most of the loop
-// there. 100 ms still feels instant and keeps the button responsive.
-constexpr uint32_t POLL_MS = 100;
 }  // namespace
 
 
@@ -35,11 +31,8 @@ using namespace MOONCAKE::USER_APP;
 
 void RFID_Test::_poll_card()
 {
-    uint32_t now = millis();
-    // why the signed difference: correct across the millis() wrap
-    if (static_cast<int32_t>(now - _data.next_poll_ms) < 0)
+    if (!_data.poll.due(millis()))
         return;
-    _data.next_poll_ms = now + POLL_MS;
 
     if (!M5Dial.Rfid.PICC_IsNewCardPresent() || !M5Dial.Rfid.PICC_ReadCardSerial())
         return;
