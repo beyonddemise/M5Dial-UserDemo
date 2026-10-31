@@ -21,8 +21,13 @@ FIELD = r"\b{}:\s*([^,}}\s]+)"
 
 def controls(path):
     """Returns the control ids a chip definition declares."""
+    return list(control_defs(path))
+
+
+def control_defs(path):
+    """Returns {control id: definition} for a chip definition."""
     with open(path) as f:
-        return [c["id"] for c in json.load(f).get("controls", [])]
+        return {c["id"]: c for c in json.load(f).get("controls", [])}
 
 
 class ChipDefsTest(unittest.TestCase):
@@ -63,7 +68,13 @@ class ChipDefsTest(unittest.TestCase):
                 name = ptype[len("chip-"):]
                 chip = os.path.join(SIM, "chips", name, name + ".chip.json")
                 with self.subTest(scenario=os.path.relpath(path, SIM), part=part, control=cid):
-                    self.assertIn(cid, controls(chip))
+                    defs = control_defs(chip)
+                    self.assertIn(cid, defs)
+                    # why: an out-of-range value never reaches the chip (Brightness once set
+                    # steps=100 on a -20..20 control and the knob never turned)
+                    value = float(re.search(FIELD.format("value"), step).group(1))
+                    self.assertGreaterEqual(value, defs[cid]["min"])
+                    self.assertLessEqual(value, defs[cid]["max"])
 
 if __name__ == "__main__":
     unittest.main()
