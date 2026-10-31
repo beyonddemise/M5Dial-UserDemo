@@ -19,6 +19,7 @@
 #include "../../dial_encoder.h"
 #include "../../ui_tones.h"
 #include "../lcd_test/app_lcd_test.h"
+#include "../rfid_test/app_rfid_test.h"
 #include "../rtc_test/app_rtc_test.h"
 #include "../set_brightness/app_set_brightness.h"
 #include "../temp_demo/app_temp_demo.h"
@@ -257,7 +258,8 @@ void Launcher::_app_open_callback(uint8_t selectedNum)
         case launcher_layout::SLOT_RTC_TEST:
             app_ptr = new MOONCAKE::USER_APP::RTC_Test;
             break;
-        case 2:  // MOONCAKE::USER_APP::RFID_Test
+        case launcher_layout::SLOT_RFID_TEST:
+            app_ptr = new MOONCAKE::USER_APP::RFID_Test;
             break;
         case launcher_layout::SLOT_BRIGHTNESS:
             app_ptr = new MOONCAKE::USER_APP::Set_Brightness;

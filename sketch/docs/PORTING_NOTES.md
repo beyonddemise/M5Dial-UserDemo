@@ -327,7 +327,7 @@ the sketch and for every library source alike (checked in a `--verbose` build). 
 translation unit of one build sees the same answer. Sketches without a `secrets.h` (the
 examples) and the host tests (`-Isrc` only) get the placeholders.
 
-## Small apps, Tasks 7-10
+## Small apps, Tasks 7-11
 
 ### Shared app helpers (`m5dd_begin.h`)
 
@@ -427,3 +427,26 @@ with `<Class>` = `setAppName()` = the C++ class name.
   first frame is logged after `app: open`.
 - The "SET" button shows `temp_demo_button_released` while pressed and `..._pressed` otherwise,
   as upstream (the two images differ only slightly).
+
+### RFID test (`RFID_Test`, Task 11)
+
+| Original (`_data.hal->...`, esp-idf-rc522)               | Port                                                          |
+|----------------------------------------------------------|---------------------------------------------------------------|
+| `HAL::HAL*` user data, `rc522_handle_t*`                 | `AppContext*` (`getUserData()`), no driver handle             |
+| `rc522_create` + `rc522_register_events` + `rc522_start` in `onCreate` | none: `m5dd::begin()` initialised the reader (bounded, checked, "RFID presence probe"); `onCreate` reads `m5dd::rfidPresent()` |
+| `RC522_EVENT_TAG_SCANNED` callback (driver task)         | poll in `onRunning()` every 100 ms: `M5Dial.Rfid.PICC_IsNewCardPresent() && PICC_ReadCardSerial()`, then `PICC_HaltA()` |
+| `tag->serial_number` (uint64), `SN: %llu` on screen      | `M5Dial.Rfid.uid.uidByte/.size` → `uid_format::formatUid` (host-tested) `04:A1:B2:C3`, shown under "UID" in efontCN_16_b |
+| `buzz.tone(4000, 100)`                                   | `M5Dial.Speaker.tone(4000, 30)` (plan value)                  |
+| `!encoder.btn.read()` + hold loop                        | `m5dd::buttonClicked()`                                       |
+| `rc522_unregister_events` + `rc522_destroy` in `onDestroy` | nothing: the reader stays initialised for the next open     |
+| `_log("init rc522")`, `_log("Tag scanned (sn: ...)")`    | `app: open RFID_Test`, `rfid: ready` or `rfid: missing` (warning), `rfid: uid=<HEX:..>`, `app: close RFID_Test` |
+
+- **Reader missing:** `rfid: missing` is logged, the page shows "Reader Not Found", and the app
+  never calls `M5Dial.Rfid` (its register access ignores I2C errors, and `PCD_Init()` could hang).
+  The button still quits.
+- **One line per presentation:** the card is halted after each read, so it ignores REQA until it
+  leaves the field; presenting it again gives a new `rfid: uid=` line (scenario `card.test.yaml`).
+- **Poll period 100 ms:** with no card, each `PICC_IsNewCardPresent()` waits for the reader's
+  25 ms receive timeout over I2C; polling every frame would spend most of the loop there.
+- The UID line uses `GUI_FONT_CN_SMALL`: a 7-byte UID is 20 characters, too wide for the round
+  panel in efontCN_24.
