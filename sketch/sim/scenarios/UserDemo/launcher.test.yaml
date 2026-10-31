@@ -99,8 +99,24 @@ steps:
   - wait-serial: 'app: close Set_Brightness'
   - wait-serial: 'launcher: ready'
 
-  # --- TempDemo: three detents to slot 6, open, one warmer step, quit
-  - set-control: { part-id: enc, control: steps, value: 3 }
+  # --- WiFi_Scan: one detent to slot 4, open, one scan result, quit (Wi-Fi off, heap logged)
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'launcher: select 4 WifiScan'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open WiFi_Scan'
+  - wait-serial: 'wifi: ap_count='
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'wifi: heap='
+  - wait-serial: 'app: close WiFi_Scan'
+  - wait-serial: 'launcher: ready'
+
+  # --- TempDemo: two detents to slot 6, open, one warmer step, quit
+  - set-control: { part-id: enc, control: steps, value: 2 }
   - wait-serial: 'launcher: select 6 TempDemo'
   - set-control: { part-id: enc, control: steps, value: 0 }
   - set-control: { part-id: btn, control: pressed, value: 1 }
