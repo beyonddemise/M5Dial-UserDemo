@@ -3,7 +3,7 @@
 # Run: tools/sim.sh examples/RfidTest sim/scenarios/RfidTest/card.test.yaml
 #
 # Parts (sim/diagram.json): btn = front button GPIO42, rfid = ws1850s chip (I2C 0x28).
-# ws1850s controls (sim/chips/ws1850s/README.md): card_present 0/1, uid0..uid3 = the card's
+# ws1850s controls (sim/chips/ws1850s/README.md): cardPresent 0/1, uid0..uid3 = the card's
 # 4-byte UID (0-255 each). Card UID used here: 04:A1:B2:C3 = 4, 161, 178, 195.
 name: 'RfidTest: read, re-present and quit'
 version: 1
@@ -14,24 +14,24 @@ steps:
   - wait-serial: 'rfid: ready'
 
   # --- present the card: one uid line (the app halts the card after the read)
-  # why the UID before card_present: changing the UID of a card in the field resets it; setting
+  # why the UID before cardPresent: changing the UID of a card in the field resets it; setting
   # it first makes the card enter the field with its final UID
   - set-control: { part-id: rfid, control: uid0, value: 4 }
   - set-control: { part-id: rfid, control: uid1, value: 161 }
   - set-control: { part-id: rfid, control: uid2, value: 178 }
   - set-control: { part-id: rfid, control: uid3, value: 195 }
-  - set-control: { part-id: rfid, control: card_present, value: 1 }
+  - set-control: { part-id: rfid, control: cardPresent, value: 1 }
   - wait-serial: 'rfid: uid=04:A1:B2:C3'
 
   # --- remove it and present it again: a second uid line shows HaltA + re-detection work
   # why the delay while removed: the app polls every 100 ms; give it a few polls without a card
   # (wait-serial cannot assert that no second line came while the halted card stayed in the field)
   - delay: 300ms
-  - set-control: { part-id: rfid, control: card_present, value: 0 }
+  - set-control: { part-id: rfid, control: cardPresent, value: 0 }
   - delay: 300ms
-  - set-control: { part-id: rfid, control: card_present, value: 1 }
+  - set-control: { part-id: rfid, control: cardPresent, value: 1 }
   - wait-serial: 'rfid: uid=04:A1:B2:C3'
-  - set-control: { part-id: rfid, control: card_present, value: 0 }
+  - set-control: { part-id: rfid, control: cardPresent, value: 0 }
 
   # --- button click quits (Review Focus 1: the release wait must call M5Dial.update())
   - set-control: { part-id: btn, control: pressed, value: 1 }

@@ -79,5 +79,5 @@ steps:
   - set-control: { part-id: rfid, control: uid1, value: 173 }
   - set-control: { part-id: rfid, control: uid2, value: 190 }
   - set-control: { part-id: rfid, control: uid3, value: 239 }
-  - set-control: { part-id: rfid, control: card_present, value: 1 }
+  - set-control: { part-id: rfid, control: cardPresent, value: 1 }
   - wait-serial: 'rfid: uid=DE:AD:BE:EF'

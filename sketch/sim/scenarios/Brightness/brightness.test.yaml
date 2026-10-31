@@ -19,17 +19,46 @@ steps:
   # detent after idle steps by 1. A frame takes well under 72 ms, so every later step is >= 2:
   # 1 + 99 * 2 = +199 at least, enough to reach the clamp from any plausible start value
   # (getBrightness() at open); at a typical ~20 ms frame it is +7..10 per detent.
+  # why 5 x 20: `steps` accepts -20..20 (sim/chips/encoder); each burst of 20 detents takes
+  # ~40 ms at 500 us per edge, the 60 ms gap lets it finish before the re-arm and keeps the gap
+  # well under 72 ms, so the bound above still holds
   # why edgeIntervalUs 500: a detent every 2 ms keeps the burst short (~0.8 s)
   - set-control: { part-id: enc, control: edgeIntervalUs, value: 500 }
-  - set-control: { part-id: enc, control: steps, value: 100 }
-  - wait-serial: 'brightness: 255'
+  - set-control: { part-id: enc, control: steps, value: 20 }
+  - delay: 60ms
   - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: 20 }
+  - delay: 60ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: 20 }
+  - delay: 60ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: 20 }
+  - delay: 60ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: 20 }
+  - delay: 60ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - wait-serial: 'brightness: 255'
   - delay: 200ms
 
   # --- fast counter-clockwise burst: clamps at 0 (from 255 needs well under 100 detents)
-  - set-control: { part-id: enc, control: steps, value: -100 }
-  - wait-serial: 'brightness: 0'
+  - set-control: { part-id: enc, control: steps, value: -20 }
+  - delay: 60ms
   - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: -20 }
+  - delay: 60ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: -20 }
+  - delay: 60ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: -20 }
+  - delay: 60ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: enc, control: steps, value: -20 }
+  - delay: 60ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - wait-serial: 'brightness: 0'
   # why 200 ms: more than 80 ms since the last processed step, so the next detent steps by 1
   - delay: 200ms
 

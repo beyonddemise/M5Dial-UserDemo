@@ -4,6 +4,9 @@
  */
 #include "m5dd_begin.h"
 
+#include <esp_rom_uart.h>
+#include <stdio.h>
+
 #include "config.h"
 #include "dial_encoder.h"
 #include "rfid_reset.h"
@@ -121,7 +124,11 @@ void runStandalone(MOONCAKE::APP_BASE& app, AppContext& ctx) {
             app.onDestroy();
             M5_LOGI("app: restart");
             // why: a standalone sketch has no launcher to return to; restarting re-opens the
-            // app. Flush first so the log line reaches the host before USB-CDC drops.
+            // app. Drain every log path first: M5_LOG* goes through printf to the UART0
+            // console, whose hardware FIFO a reset discards (the Wokwi scenarios lost
+            // "app: close"/"app: restart" this way); Serial (USB-CDC) is flushed for the device.
+            fflush(stdout);
+            esp_rom_output_tx_wait_idle(0);
             Serial.flush();
             ESP.restart();
         }

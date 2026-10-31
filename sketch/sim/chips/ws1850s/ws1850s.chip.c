@@ -7,7 +7,7 @@
 // register, interrupt/error/status registers, CRC coprocessor, timer, IRQ pin)
 // plus one ISO/IEC 14443-3 type A card in the field: REQA/WUPA, cascade level 1
 // anticollision, SELECT and HLTA, with the IDLE/READY/ACTIVE/HALT state machine.
-// The card is controlled by the part's controls `card_present` and `uid0..uid3`.
+// The card is controlled by the part's controls `cardPresent` and `uid0..uid3`.
 //
 // See README.md for the supported commands and limitations.
 
@@ -504,7 +504,7 @@ void chip_init(void) {
   c->sak = (uint8_t)attr_read(attr_init("sak", 0x08));
   c->atqa = (uint16_t)attr_read(attr_init("atqa", 0x0004));
   c->debug = attr_read(attr_init("debug", 0)) != 0;
-  c->attr_present = attr_init("card_present", 0);
+  c->attr_present = attr_init("cardPresent", 0);
   static const char *uid_names[4] = {"uid0", "uid1", "uid2", "uid3"};
   for (int i = 0; i < 4; i++) c->attr_uid[i] = attr_init(uid_names[i], 0);
 
