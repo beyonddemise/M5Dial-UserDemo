@@ -31,3 +31,14 @@
   (m5stack/M5Dial#8). CodeRabbit caught it after the PR was merged.
 - **Rule:** before a design depends on a third-party API for timing-critical I/O, read its source
   for the exact pins/board and search its open issues. Address review comments before merging.
+
+## 2026-11-03 — A checksum proves a copy, not a healthy device; don't diagnose from topology guesses
+
+- **Mistake:** after a factory restore whose readback matched the backup's sha256, I called the
+  firmware "verified good" and blamed power. I also took `05ac:800b` (the Mac's built-in USB2
+  hub) for an external hub, although the board was in a Mac port directly. The owner corrected
+  both; the unit is now declared damaged (likely a wrong bootloader).
+- **Rule:** a matching hash only proves the restore reproduced the image that was read. Say
+  "restored bit-for-bit what was read on <date>", never "known good", unless the image comes
+  from a trusted source (the vendor's binary, or a working unit). Before blaming cables, hubs
+  or power, ask the owner about the physical setup or check it; don't infer it from USB IDs.
