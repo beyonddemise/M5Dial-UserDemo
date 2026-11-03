@@ -109,3 +109,29 @@ HOST_TEST(menu_takes_ownership_of_an_item_passed_by_pointer) {
     }
     HT_EQ(0L, live_allocations - before);  // freed by ~Menu_t, as documented on addItem()
 }
+
+HOST_TEST(simple_menu_reinit_with_its_own_part_keeps_that_part) {
+    long before = live_allocations;
+    long after_fresh_reinit = 0;
+    {
+        SMOOTH_MENU::Simple_Menu control;
+        build_like_more_menu(control);
+        long built = live_allocations;
+        control.init();  // fresh re-init: frees and recreates all three parts
+        after_fresh_reinit = live_allocations - built;
+    }
+    {
+        SMOOTH_MENU::Simple_Menu menu;
+        build_like_more_menu(menu);
+        long built = live_allocations;
+        SMOOTH_MENU::Selector_t* kept = menu.getSelector();
+        menu.init(nullptr, kept, nullptr);  // hand an owned part back: it must survive, still owned
+        // why: the same live count as a fresh re-init proves the selector was not freed
+        HT_EQ(after_fresh_reinit, live_allocations - built);
+        HT_EQ(true, menu.getSelector() == kept);
+        // why: an empty menu has no item 0 for the selector to go to (upstream behaviour)
+        menu.getMenu()->addItem("item", 0, 0, 10, 10);
+        menu.update(0, false);  // the kept selector now serves the new menu
+    }
+    HT_EQ(0L, live_allocations - before);  // still owned: freed by ~Simple_Menu
+}
