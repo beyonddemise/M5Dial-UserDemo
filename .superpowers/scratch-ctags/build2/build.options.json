@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "tools.ctags.path=/Users/stw/Code/M5Dial-UserDemo/.superpowers/scratch-ctags/data/packages/builtin/tools/ctags/5.8-arduino11",
+  "fqbn": "m5stack:esp32:m5stack_dial:CDCOnBoot=cdc",
+  "hardwareFolders": "/Users/stw/Code/M5Dial-UserDemo/sketch/.arduino/data/packages/m5stack/hardware/esp32/3.3.10,/Users/stw/Code/M5Dial-UserDemo/sketch/.arduino/data/packages/m5stack/hardware/esp32/3.3.10",
+  "otherLibrariesFolders": "/Users/stw/Code/M5Dial-UserDemo/.superpowers/wt-pr24/sketch/libraries",
+  "sketchLocation": "/Users/stw/Code/M5Dial-UserDemo/.superpowers/scratch-ctags/Repro"
+}
