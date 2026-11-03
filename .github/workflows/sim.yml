@@ -27,9 +27,14 @@ on:
 permissions:
   contents: read
 
-# why: a newer run for the same ref supersedes the old one (no Wokwi minutes for stale commits)
+# why: a newer run for the same ref supersedes the old one (no Wokwi minutes for stale commits).
+# A label event for any label other than `sim` gets its own group (run id): its scenario job is
+# skipped, and in the shared group it would cancel a running scenario job and show a pass.
 concurrency:
-  group: sim-${{ github.ref }}
+  group: >-
+    sim-${{ github.ref }}${{
+    github.event.action == 'labeled' && github.event.label.name != 'sim'
+    && format('-label-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
