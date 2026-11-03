@@ -37,6 +37,11 @@ void BleHeartRateServer::ServerCallbacks::onDisconnect(NimBLEServer*, NimBLEConn
 void BleHeartRateServer::MeasurementCallbacks::onSubscribe(NimBLECharacteristic*,
                                                            NimBLEConnInfo&, uint16_t subValue)
 {
+    // why one flag, not one per connection (as upstream's notify_state): at most one central
+    // is connected. Legacy connectable advertising stops when a connection is made; NimBLE
+    // restarts it after a failed connect only, and advertiseOnDisconnect() after the
+    // disconnect. Allowing a second central (extended advertising, or restarting advertising
+    // on connect) needs per-connection subscription state here and in onDisconnect().
     _owner._peer_subscribed = (subValue & 0x01) != 0;
 }
 

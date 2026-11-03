@@ -26,14 +26,23 @@ class ParseArgsTest(unittest.TestCase):
         self.assertEqual(args.notifications, 5)
         self.assertEqual(args.timeout, 7.5)
 
+    def _usage_error(self, argv):
+        """Returns (exit code, stderr) of a parse_args() call that must fail."""
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+            ble_check.parse_args(argv)
+        return cm.exception.code, err.getvalue()
+
     def test_name_is_required(self):
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            ble_check.parse_args([])
+        code, err = self._usage_error([])
+        self.assertEqual(code, 2)  # argparse's usage-error code
+        self.assertIn("--name", err)
 
     def test_notifications_must_be_at_least_two(self):
         # why: one value cannot show an increasing counter
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            ble_check.parse_args(["--name", "x", "--notifications", "1"])
+        code, err = self._usage_error(["--name", "x", "--notifications", "1"])
+        self.assertEqual(code, 2)
+        self.assertIn("--notifications", err)
 
 
 class ParseMeasurementTest(unittest.TestCase):
