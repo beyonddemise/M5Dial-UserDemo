@@ -1,0 +1,11 @@
+# UserDemo partition table (8 MB flash): one 4 MB app as the original firmware
+# (/partitions.csv: factory 4M), no OTA, no FAT/SPIFFS - the port stores no files.
+# Picked up by the core's prebuild hook instead of the PartitionScheme in tools/deps.txt;
+# tools/build.sh size-checks against app0. Layout follows the core's huge_app.csv (otadata
+# at 0xe000, where every Arduino upload writes boot_app0.bin) with app0 grown to 4 MB.
+# 0x420000-0x800000 stays unused. See docs/PORTING_NOTES.md, "Partition table (Task 14)".
+# Name,   Type, SubType,  Offset,   Size,     Flags
+nvs,      data, nvs,      0x9000,   0x5000,
+otadata,  data, ota,      0xe000,   0x2000,
+app0,     app,  ota_0,    0x10000,  0x400000,
+coredump, data, coredump, 0x410000, 0x10000,

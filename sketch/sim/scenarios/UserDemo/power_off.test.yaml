@@ -1,0 +1,39 @@
+# UserDemo on the virtual M5Dial: More menu -> "Power Off" logs `power: off`, then calls
+# M5Dial.Power.powerOff() (hold pin GPIO46 low, then deep sleep). The scenario ends at the log
+# line: whatever the sim does after it (stops, idles in deep sleep) is accepted.
+# Own Wokwi session: after the power-off nothing else can run in this boot.
+# Run: tools/sim.sh UserDemo sim/scenarios/UserDemo/power_off.test.yaml
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, enc = encoder chip on GPIO41 (A) /
+# GPIO40 (B). `enc.steps` emits that many detents (positive = clockwise), 0 re-arms.
+# Launcher slot 7 = MoreMenu (0 -> 9 -> 8 -> 7 counter-clockwise); More menu entry 1 = Power Off.
+name: 'UserDemo: More menu, Power Off'
+version: 1
+steps:
+  - wait-serial: 'boot: UserDemo'
+  - wait-serial: 'launcher: ready'
+
+  # --- to slot 7 and open the More menu
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: -3 }
+  - wait-serial: 'launcher: select 7 MoreMenu'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - delay: 400ms
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open MoreMenu'
+
+  # --- one clockwise detent: next entry = "Power Off" (Review Focus 3)
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'more: select 1 Power Off'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  # why 500 ms: the 400 ms selector animation settles before the click
+  - delay: 500ms
+
+  # --- click: `power: off` is logged (and flushed) before the power goes
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'more: selected Power Off'
+  - wait-serial: 'power: off'

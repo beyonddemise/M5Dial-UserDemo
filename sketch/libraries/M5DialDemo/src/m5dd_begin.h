@@ -31,6 +31,12 @@ void begin(const char* sketchName, M5Canvas& canvas);
 bool rfidPresent();
 
 /**
+ * Blocks until every log line written so far has left the chip: stdout, the UART0 console
+ * FIFO and Serial (USB-CDC). Call before a restart or power-off that must not lose them.
+ */
+void flushLog();
+
+/**
  * Runs one app on its own, as a standalone sketch: setUserData(&ctx), onSetup(), onCreate(),
  * then forever M5Dial.update() + onRunning(). When the app asks to close or be destroyed,
  * calls onDestroy(), logs `app: restart` and restarts the chip. Never returns.

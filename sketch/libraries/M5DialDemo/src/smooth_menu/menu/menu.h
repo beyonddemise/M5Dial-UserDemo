@@ -38,6 +38,9 @@ namespace SMOOTH_MENU {
             inline bool isMenu() { return _is_menu; }
             virtual void open() { }
             virtual void close() { }
+            // why virtual: Item_t has virtual members and Menu_t derives from it; a delete
+            // through an Item_t* must run the derived destructor (M5DialDemo port)
+            virtual ~Item_t() = default;
             int x_target = 0;
             int y_target = 0;
         protected:
@@ -80,7 +83,10 @@ namespace SMOOTH_MENU {
 
         public:
             Menu_t();
-            ~Menu_t() = default;
+            /** Frees the items addItem() created (M5DialDemo port; upstream leaked them). */
+            ~Menu_t() { clearAllItem(); }  // virtual through ~Item_t()
+            Menu_t(const Menu_t&) = delete;             ///< owns its items
+            Menu_t& operator=(const Menu_t&) = delete;  ///< owns its items
 
 
             inline void config(MENU::Config_t cfg) { _cfg = cfg; }
@@ -115,8 +121,12 @@ namespace SMOOTH_MENU {
 
             /**
              * @brief Add item into item list
-             * 
-             * @param item 
+             *
+             * Ownership (M5DialDemo port): the menu takes `item` over and deletes it in
+             * clearAllItem() and ~Menu_t(), as it does the items the other overloads create.
+             * So `item` must come from `new`, and must not be added to a second menu.
+             *
+             * @param item heap-allocated item, or nullptr (rejected, returns -1)
              * @return int Item ID
              */
             int addItem(Item_t* item);
@@ -156,7 +166,8 @@ namespace SMOOTH_MENU {
 
 
             /**
-             * @brief Remove all items in menu
+             * @brief Remove all items in menu and free them (M5DialDemo port: upstream only
+             *        dropped the pointers, which leaked every item)
              * 
              */
             void clearAllItem();

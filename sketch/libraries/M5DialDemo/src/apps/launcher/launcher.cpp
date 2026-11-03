@@ -20,6 +20,7 @@
 #include "../../ui_tones.h"
 #include "../ble_server/app_ble_server.h"
 #include "../lcd_test/app_lcd_test.h"
+#include "../more_menu/app_more_menu.h"
 #include "../rfid_test/app_rfid_test.h"
 #include "../rtc_test/app_rtc_test.h"
 #include "../set_brightness/app_set_brightness.h"
@@ -228,7 +229,7 @@ void Launcher::_app_open_callback(uint8_t selectedNum)
 
     /* Special color for app more menu */
     uint32_t theme_color = 0;
-    if (selectedNum != 7)
+    if (selectedNum != launcher_layout::SLOT_MORE_MENU)
         theme_color = icon_list[selectedNum].color;
     else
         theme_color = 0;
@@ -275,7 +276,8 @@ void Launcher::_app_open_callback(uint8_t selectedNum)
         case launcher_layout::SLOT_TEMP_DEMO:  // upstream VideoShit
             app_ptr = new MOONCAKE::USER_APP::TempDemo;
             break;
-        case 7:  // MOONCAKE::USER_APP::MoreMenu
+        case launcher_layout::SLOT_MORE_MENU:
+            app_ptr = new MOONCAKE::USER_APP::MoreMenu;
             break;
         default:
             break;

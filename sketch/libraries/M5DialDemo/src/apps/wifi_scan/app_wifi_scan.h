@@ -34,6 +34,7 @@ namespace MOONCAKE
                 AppContext* ctx = nullptr;  ///< host context (canvas)
 
                 bool scanning = false;                 ///< a WiFi.scanNetworks(true) is in flight
+                bool scan_done = false;                ///< a scan completed (ap_count logged)
                 uint32_t scroll_speed_time_count = 0;  ///< millis() of the last detent
 
                 int menu_y_offset = 0;         ///< scroll target of the list, px
@@ -80,6 +81,16 @@ namespace MOONCAKE
                  * @return GUI_Base*
                  */
                 GUI_Base* getGui() override { return &_gui; }
+
+
+                /**
+                 * @brief Has a scan completed since onCreate()? True from the frame that
+                 * logged `wifi: ap_count=<n>` (n may be 0), false while the first scan runs
+                 * or after a failed scan.
+                 * why: the MemSoak driver's done condition (examples/MemSoak); it must not
+                 * parse the log
+                 */
+                bool scanDone() const { return _data.scan_done; }
 
 
                 /**

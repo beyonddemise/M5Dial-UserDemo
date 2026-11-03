@@ -1,0 +1,39 @@
+# UserDemo on the virtual M5Dial: open the More menu from the launcher, choose "Quit", and be
+# back in the launcher.
+# Run: tools/sim.sh UserDemo sim/scenarios/UserDemo/more_menu_quit.test.yaml
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, enc = encoder chip on GPIO41 (A) /
+# GPIO40 (B). `enc.steps` emits that many detents (positive = clockwise), 0 re-arms.
+# Launcher slots (launcher_layout.h): 7 = MoreMenu; from slot 0, counter-clockwise goes
+# 0 -> 9 -> 8 -> 7 (ten ring slots, loop mode). More menu entries (more_menu_items.h):
+# 0 Quit (selected on open), 1 Power Off, then upstream's filler rows.
+name: 'UserDemo: More menu, Quit'
+version: 1
+steps:
+  - wait-serial: 'boot: UserDemo'
+  - wait-serial: 'launcher: ready'
+
+  # --- three counter-clockwise detents: slot 0 -> 9 -> 8 -> 7 (MoreMenu)
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: -3 }
+  - wait-serial: 'launcher: select 7 MoreMenu'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  # why 400 ms: let the 300 ms selector animation settle before the click
+  - delay: 400ms
+
+  # --- click opens the More menu; the selector starts on "Quit"
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open MoreMenu'
+  - delay: 300ms
+
+  # --- click chooses "Quit": the app closes and the launcher is back
+  # why `app: close MoreMenu` first: `launcher: ready` was already logged at boot, so only
+  # the line after the close proves the return
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'more: selected Quit'
+  - wait-serial: 'app: close MoreMenu'
+  - wait-serial: 'launcher: ready'
