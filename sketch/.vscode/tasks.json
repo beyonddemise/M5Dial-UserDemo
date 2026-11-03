@@ -40,7 +40,8 @@
                   "sim/scenarios/LcdTest/lcd_test.test.yaml", "sim/scenarios/RtcTest/rtc_test.test.yaml",
                   "sim/scenarios/Brightness/brightness.test.yaml",
                   "sim/scenarios/TempDemo/temp_demo.test.yaml",
-                  "sim/scenarios/RfidTest/card.test.yaml"],
+                  "sim/scenarios/RfidTest/card.test.yaml",
+                  "sim/scenarios/WifiScan/scan.test.yaml"],
       "default": "sim/scenarios/DialProbe/probe.test.yaml" },
     { "id": "expect", "type": "promptString", "description": "Regex expected in the serial log",
       "default": "init: " }

@@ -23,6 +23,7 @@
 #include "../rtc_test/app_rtc_test.h"
 #include "../set_brightness/app_set_brightness.h"
 #include "../temp_demo/app_temp_demo.h"
+#include "../wifi_scan/app_wifi_scan.h"
 #include "launcher_layout.h"
 #include "launcher_render_callback.hpp"
 
@@ -264,7 +265,8 @@ void Launcher::_app_open_callback(uint8_t selectedNum)
         case launcher_layout::SLOT_BRIGHTNESS:
             app_ptr = new MOONCAKE::USER_APP::Set_Brightness;
             break;
-        case 4:  // MOONCAKE::USER_APP::WiFi_Scan
+        case launcher_layout::SLOT_WIFI_SCAN:
+            app_ptr = new MOONCAKE::USER_APP::WiFi_Scan;
             break;
         case 5:  // MOONCAKE::USER_APP::BLE_Server
             break;
