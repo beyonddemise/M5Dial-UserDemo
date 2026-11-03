@@ -14,8 +14,10 @@ LOCAL = (".arduino", ".build", "backup", "tools/.venv", "tools/bin", "tools/wasi
 
 
 def _ignored(repo, path):
-    """True if git's ignore rules in `repo` match `path`."""
-    proc = subprocess.run(["git", "-C", repo, "check-ignore", "--no-index", "-q", path])
+    """True if the ignore rules in `repo`'s own .gitignore match `path`."""
+    # why core.excludesFile: a user's global ignore (e.g. `.venv`) must not mask a missing rule
+    proc = subprocess.run(["git", "-C", repo, "-c", "core.excludesFile=" + os.devnull,
+                           "check-ignore", "--no-index", "-q", path])
     return proc.returncode == 0
 
 
@@ -25,7 +27,8 @@ class GitignoreTest(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.repo = tmp.name
-        subprocess.run(["git", "init", "-q", self.repo], check=True)
+        # why an empty template: a custom init template could add info/exclude rules
+        subprocess.run(["git", "init", "-q", "--template=", self.repo], check=True)
         shutil.copy(os.path.join(SKETCH, ".gitignore"), self.repo)
 
     def test_local_folders_are_ignored_as_symlinks(self):
