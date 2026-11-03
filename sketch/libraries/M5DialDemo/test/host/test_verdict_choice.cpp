@@ -4,6 +4,8 @@
  *        detents move it (clockwise = next, Review Focus 3), clamped at both ends.
  */
 #include "apps/factory_test/verdict_choice.h"
+#include <cstdint>
+
 #include "host_test.h"
 
 using factory_test::Verdict;
@@ -40,6 +42,14 @@ HOST_TEST(choice_clamps_at_both_ends) {
     HT_EQ(0, move(0, -1));
     HT_EQ(0, move(1, -50));
     HT_EQ(1, move(1, 0));
+}
+
+HOST_TEST(choice_extreme_detents_clamp_without_overflow) {
+    // why: int32 limits catch a narrowed sum, which would wrap and clamp to the wrong end
+    HT_EQ(2, move(2, INT32_MAX));
+    HT_EQ(0, move(0, INT32_MIN));
+    HT_EQ(2, move(0, INT32_MAX));
+    HT_EQ(0, move(2, INT32_MIN));
 }
 
 HOST_TEST(choice_out_of_range_index_is_clamped) {

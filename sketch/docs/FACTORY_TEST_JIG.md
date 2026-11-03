@@ -15,6 +15,9 @@ Deviations from the original are in `PORTING_NOTES.md`, "Factory test".
 | Port B (G1/G2)   | **GPIO1**  | Potentiometer **wiper**, 0-3.3 V. Ends to 3V3 and GND, never 5 V |
 | Port A (G13/G15) | SDA G13, SCL G15, 5V, GND | Any I2C device, e.g. an M5 Unit. It shows up by address. |
 
+GPIO2 drives DIN at 3.3 V. A WS2812B powered at 5 V may need DIN ≥ 0.7 × VDD (3.5 V), so it
+can stay dark or flicker. Use a ring rated for 3.3 V data input, or put a 3.3 V → 5 V level shifter (e.g. 74AHCT125) between GPIO2 and DIN.
+
 The virtual M5Dial (`sim/diagram.json`) has the same jig: `ring` (wokwi-led-ring, 14 pixels) on
 GPIO2 and `pot` (wokwi-potentiometer) on GPIO1. Port A is not connected, so it shows `无` (none).
 
