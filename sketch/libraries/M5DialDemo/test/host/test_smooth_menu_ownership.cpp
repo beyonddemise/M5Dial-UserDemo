@@ -88,3 +88,24 @@ HOST_TEST(menu_clear_all_item_frees_the_items) {
     HT_EQ(0, (int)menu.getItemList().size());
     HT_EQ(0L, live_allocations - before);
 }
+
+HOST_TEST(simple_menu_init_twice_frees_the_first_parts) {
+    long before = live_allocations;
+    {
+        SMOOTH_MENU::Simple_Menu menu;
+        build_like_more_menu(menu);
+        build_like_more_menu(menu);  // re-init: the first menu, selector and camera must go
+        HT_EQ(MORE_MENU_ITEMS, (int)menu.getMenu()->getItemNum());
+    }
+    HT_EQ(0L, live_allocations - before);
+}
+
+HOST_TEST(menu_takes_ownership_of_an_item_passed_by_pointer) {
+    long before = live_allocations;
+    {
+        SMOOTH_MENU::Menu_t menu;
+        HT_EQ(0, menu.addItem(new SMOOTH_MENU::Item_t));
+        HT_EQ(-1, menu.addItem(nullptr));
+    }
+    HT_EQ(0L, live_allocations - before);  // freed by ~Menu_t, as documented on addItem()
+}

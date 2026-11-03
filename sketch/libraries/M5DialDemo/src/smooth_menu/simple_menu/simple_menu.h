@@ -42,6 +42,9 @@ namespace SMOOTH_MENU {
             bool _owns_selector = false;
             bool _owns_camera = false;
 
+            /** Frees the parts this menu created and forgets them (destructor, re-init()). */
+            void _release_owned();
+
             
         public:
             Simple_Menu() :

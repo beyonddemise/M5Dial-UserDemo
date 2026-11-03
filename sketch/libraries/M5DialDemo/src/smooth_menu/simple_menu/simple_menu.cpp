@@ -23,14 +23,27 @@ namespace SMOOTH_MENU {
 
     Simple_Menu::~Simple_Menu()
     {
+        _release_owned();
+    }
+
+
+    void Simple_Menu::_release_owned()
+    {
         if (_owns_camera) delete _camera;
         if (_owns_selector) delete _selector;
         if (_owns_menu) delete _menu;
+        _camera = nullptr;
+        _selector = nullptr;
+        _menu = nullptr;
+        _owns_camera = _owns_selector = _owns_menu = false;
     }
 
 
     void Simple_Menu::init(Menu_t* menu, Selector_t* selector, Camrea_t* camera)
     {
+        // why: a second init() would otherwise overwrite (and leak) the parts the first created
+        _release_owned();
+        _first_open = true;
         /* Init menu */
         _owns_menu = (menu == nullptr);
         if (menu == nullptr) {

@@ -121,8 +121,12 @@ namespace SMOOTH_MENU {
 
             /**
              * @brief Add item into item list
-             * 
-             * @param item 
+             *
+             * Ownership (M5DialDemo port): the menu takes `item` over and deletes it in
+             * clearAllItem() and ~Menu_t(), as it does the items the other overloads create.
+             * So `item` must come from `new`, and must not be added to a second menu.
+             *
+             * @param item heap-allocated item, or nullptr (rejected, returns -1)
              * @return int Item ID
              */
             int addItem(Item_t* item);
