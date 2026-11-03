@@ -110,11 +110,11 @@ sketch/
 **Files:** `sketch/sim/chips/{ft3267,pcf8563,ws1850s}/*`, `diagram.json` (add KY-040 on 40/41, pushbutton on 42, buzzer on 3, NeoPixel ×14 on 2, potentiometer on 1, Wokwi Wi-Fi), `sketch/examples/DialProbe/DialProbe.ino`, `sketch/sim/scenarios/DialProbe/*.test.yaml`. Delete `examples/Smoke` (move its scenario/device check to DialProbe).
 
 **Interfaces — Produces:**
-- Chip controls (names fixed, used by every later scenario): `ft3267`: `x` (0–239), `y` (0–239), `touched` (0/1). `pcf8563`: starts from host UTC; implements time regs + alarm/timer + IRQ pin. `ws1850s`: `card_present` (0/1), `uid0..uid3` (0–255); MFRC522 register subset for REQA, anticollision CL1, SELECT, HLTA. Pins/addresses copied from M5Unified's M5Dial setup.
+- Chip controls (names fixed, used by every later scenario): `ft3267`: `x` (0–239), `y` (0–239), `touched` (0/1). `pcf8563`: starts from host UTC; implements time regs + alarm/timer + IRQ pin. `ws1850s`: `cardPresent` (0/1; Wokwi control ids are alphanumeric, no `_`), `uid0..uid3` (0–255); MFRC522 register subset for REQA, anticollision CL1, SELECT, HLTA. Pins/addresses copied from M5Unified's M5Dial setup.
 - If the KY-040 can't be driven from scenarios, add chip `encoder` with control `steps` (signed; each change emits that many CW/CCW quadrature cycles on 40/41, with a configurable edge interval so fast turns can be simulated) — decision recorded in PORTING_NOTES.
 - `DialProbe.ino` (permanent diagnostic sketch, uses Task 4 `EncoderDetent` once it exists — until then raw counts): logs `init: display 240x240`, `init: rtc ok|fail`, `init: touch ok|fail`, `init: rfid ok|fail`, then events `enc: steps=<±n> raw=<n>`, `btn: pressed|released`, `touch: x=<n> y=<n>`, `rtc: YYYY-MM-DD HH:MM:SS` (1 Hz), `rfid: uid=<HEX:..>`.
 
-- [ ] **Step 1: Failing scenarios** in `scenarios/DialProbe/`: `init.test.yaml` (all four `init: … ok`), `encoder.test.yaml` (one CW detent → `enc: steps=1`; one CCW → `enc: steps=-1`), `button.test.yaml` (press → `btn: pressed`, release → `btn: released`), `touch.test.yaml` (x=120,y=60,touched=1 → `touch: x=120 y=60`), `rtc.test.yaml` (two `rtc:` lines 1 s apart), `rfid.test.yaml` (uid DE:AD:BE:EF, card_present=1 → `rfid: uid=DE:AD:BE:EF`). Run all → FAIL.
+- [ ] **Step 1: Failing scenarios** in `scenarios/DialProbe/`: `init.test.yaml` (all four `init: … ok`), `encoder.test.yaml` (one CW detent → `enc: steps=1`; one CCW → `enc: steps=-1`), `button.test.yaml` (press → `btn: pressed`, release → `btn: released`), `touch.test.yaml` (x=120,y=60,touched=1 → `touch: x=120 y=60`), `rtc.test.yaml` (two `rtc:` lines 1 s apart), `rfid.test.yaml` (uid DE:AD:BE:EF, cardPresent=1 → `rfid: uid=DE:AD:BE:EF`). Run all → FAIL.
 - [ ] **Step 2:** Implement chips + DialProbe until all PASS.
 - [ ] **Step 3:** `device_test.py examples/DialProbe --expect 'init: display 240x240' 'init: rtc ok' 'init: touch ok' 'init: rfid ok' 'rtc: 20'` → PASS on hardware (proves sim and device agree on init).
 - [ ] **Step 4:** VSCode tasks `Simulate` (opens Wokwi panel) and `Sim test` (`sim.sh` with scenario pick-list). SETUP.md item 9.
@@ -188,7 +188,7 @@ Common rules for Tasks 6–16:
 **Files:** `src/apps/rfid_test/{app_rfid_test.*,gui/*,uid_format.h}`, `test/host/test_uid_format.cpp`, `examples/RfidTest`, scenarios.
 **Interfaces:** `std::string formatUid(const uint8_t* bytes, uint8_t len)` → uppercase hex joined by `:`. Poll in `onRunning()`: `M5Dial.Rfid.PICC_IsNewCardPresent() && M5Dial.Rfid.PICC_ReadCardSerial()` → GUI update, `M5Dial.Speaker.tone(4000, 30)`, `M5_LOGI("rfid: uid=%s", …)`, `PICC_HaltA()`. Log `rfid: ready` after init.
 - [ ] **Step 1: Failing host test** (4-byte, 7-byte, leading 0x00 → `00:…`) → implement → PASS.
-- [ ] **Step 2: Failing scenario** `card.test.yaml`: `rfid: ready`; set uid 04:A1:B2:C3 + card_present=1 → `rfid: uid=04:A1:B2:C3`; remove card, present again → second uid line (HaltA/re-detect works).
+- [ ] **Step 2: Failing scenario** `card.test.yaml`: `rfid: ready`; set uid 04:A1:B2:C3 + cardPresent=1 → `rfid: uid=04:A1:B2:C3`; remove card, present again → second uid line (HaltA/re-detect works).
 - [ ] **Step 3:** Port → PASS. Device smoke `--expect 'rfid: ready'`.
 - [ ] **Step 4: Commit** `feat(apps): port RFID test to MFRC522 API`.
 

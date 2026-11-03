@@ -8,7 +8,7 @@
       "id": "esp",
       "top": 0,
       "left": 0,
-      "attrs": {}
+      "attrs": { "flashSize": "8" }
     },
     {
       "type": "chip-gc9a01",

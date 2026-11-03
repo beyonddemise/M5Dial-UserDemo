@@ -22,7 +22,7 @@ if [ ! -x "$PY" ]; then python3 -m venv "$TOOLS_DIR/.venv"; fi
 # why: old pip cannot build/select wheels for bleak's pyobjc dependency on macOS
 "$PY" -m pip install -q -U pip
 "$PY" -m pip install -q "pyserial==$PY_PYSERIAL" "pillow==$PY_PILLOW" \
-  "esptool==$PY_ESPTOOL" "bleak==$PY_BLEAK"
+  "esptool==$PY_ESPTOOL" "bleak==$PY_BLEAK" "pyyaml==$PY_PYYAML"
 
 # --- 3/4. host OS/arch mapping --------------------------------------------------------
 os="$(uname -s)"; arch="$(uname -m)"
