@@ -7,7 +7,7 @@ increasing counter (the Dial counts 90..159, then wraps to 90).
 
 Usage: ble_check.py --name M5-XXXX [--notifications 3] [--timeout 30]
 Exit codes: 0 pass, 1 counter not increasing or bad payload, 2 device not found,
-3 timeout waiting for notifications, 4 BLE error.
+3 timeout waiting for notifications, 4 BLE error (also a connect timeout or an OS error).
 Output lines: ``ble_check: body_sensor_location=<n>``, ``ble_check: hr=<n>``,
 ``ble_check: PASS``. Needs bleak (installed by setup.sh); it is imported only in main(), so
 the logic here is unit-testable without it (tests/test_ble_check.py).
@@ -25,6 +25,7 @@ BODY_SENSOR_LOCATION_UUID = "00002a38-0000-1000-8000-00805f9b34fb"
 # Simulated counter on the Dial (upstream ble_demo.c): starts at 90, 159 is followed by 90.
 HR_START = 90
 HR_LAST = 159
+HR_CYCLE = HR_LAST - HR_START + 1  # 70 values
 
 EXIT_PASS, EXIT_BAD, EXIT_NOT_FOUND, EXIT_TIMEOUT, EXIT_BLE_ERROR = 0, 1, 2, 3, 4
 
@@ -71,14 +72,17 @@ def parse_heart_rate(data: bytes) -> int:
 
 
 def counter_advanced(prev: int, cur: int) -> bool:
-    """True if ``cur`` follows ``prev``: larger, or the Dial's wrap from 159 back to 90.
+    """True if ``cur`` is ahead of ``prev`` on the Dial's 90..159 cycle (it wraps 159 -> 90).
 
     why not strictly +1: a notification can be lost if this host is slow to subscribe or
-    drain; the check is that the Dial's counter keeps moving forward.
+    drain, also next to the wrap (158 -> 90); the check is that the counter keeps moving
+    forward. "Ahead" = 1 to half a cycle forward, so a step back (100 -> 99) or a jump back
+    (120 -> 90) still fails.
     """
-    if prev == HR_LAST and cur == HR_START:
-        return True
-    return cur > prev
+    if not (HR_START <= prev <= HR_LAST and HR_START <= cur <= HR_LAST):
+        return False
+    forward = (cur - prev) % HR_CYCLE
+    return 1 <= forward <= HR_CYCLE // 2
 
 
 def counter_increasing(values: Iterable[int]) -> bool:
@@ -137,7 +141,12 @@ async def run(args: argparse.Namespace, scanner, client_cls) -> int:
                   file=sys.stderr)
             return EXIT_TIMEOUT
         finally:
-            await client.stop_notify(HEART_RATE_MEASUREMENT_UUID)
+            # why caught: a Dial that already disconnected makes this raise, which would
+            # replace the verdict above (timeout, bad value) with a BLE error
+            try:
+                await client.stop_notify(HEART_RATE_MEASUREMENT_UUID)
+            except Exception as e:  # noqa: BLE001 - cleanup only, the verdict stands
+                print(f"ble_check: stop_notify failed: {e}", file=sys.stderr)
 
     if errors:
         print(f"ble_check: {errors[0]}", file=sys.stderr)
@@ -157,7 +166,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         return EXIT_BLE_ERROR
     try:
         return asyncio.run(run(args, BleakScanner, BleakClient))
-    except BleakError as e:
+    except asyncio.TimeoutError:
+        # why: bleak's connect() re-raises its timeout; run() only maps the notification wait
+        print("ble_check: BLE error: connect timed out", file=sys.stderr)
+        return EXIT_BLE_ERROR
+    except (BleakError, OSError) as e:
         print(f"ble_check: BLE error: {e}", file=sys.stderr)
         return EXIT_BLE_ERROR
 

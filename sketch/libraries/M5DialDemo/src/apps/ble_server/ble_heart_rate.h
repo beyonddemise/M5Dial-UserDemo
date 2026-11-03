@@ -35,7 +35,9 @@ class BleHeartRateServer
     public:
         /**
          * @brief Init NimBLE, build the GATT services, start advertising `deviceName`.
-         * Does nothing if already started.
+         * Does nothing if already started. If NimBLE init or the GATT server start fails it
+         * logs `ble: init failed` / `ble: server start failed`, releases what it took and
+         * stays stopped: loop() and end() then do nothing, and the next begin() retries.
          * @param deviceName GAP / advertised name (upstream: heart_rate::deviceName(mac))
          */
         void begin(const char* deviceName);

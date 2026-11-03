@@ -10,6 +10,7 @@
 
 #include <Arduino.h>
 #include <M5Unified.h>
+#include <esp_bt.h>
 
 
 using namespace heart_rate;
@@ -52,7 +53,19 @@ void BleHeartRateServer::begin(const char* deviceName)
     _notifier.setSubscribed(false, millis());
 
     // why no nvs_flash_init() as upstream: NimBLEDevice::init() does it (PHY calibration data)
-    NimBLEDevice::init(_name);
+    if (!NimBLEDevice::init(_name))
+    {
+        // why release the controller here: init() returns false before it marks itself
+        // initialised (NVS, controller init or enable failed), so deinit() skips the teardown.
+        // A still-initialised controller would make every later open fail as well, and
+        // building a server on a host that never started locks a mutex deinit() freed.
+        if (esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_ENABLED)
+            esp_bt_controller_disable();
+        if (esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_INITED)
+            esp_bt_controller_deinit();
+        M5_LOGE("ble: init failed");
+        return;
+    }
 
     _server = NimBLEDevice::createServer();
     // why false: the callback objects are members, NimBLE must not delete them
@@ -76,7 +89,15 @@ void BleHeartRateServer::begin(const char* deviceName)
     dis->createCharacteristic(NimBLEUUID(MODEL_NUMBER_UUID), NIMBLE_PROPERTY::READ)
         ->setValue(MODEL_NUMBER);
 
-    _server->start();
+    if (!_server->start())
+    {
+        M5_LOGE("ble: server start failed");
+        // why: the same teardown as end(), so the next open starts from a clean NimBLE
+        NimBLEDevice::deinit(true);
+        _server = nullptr;
+        _measurement = nullptr;
+        return;
+    }
 
     /* Advertising: flags (general discoverable, BLE only), TX power, complete name (upstream) */
     NimBLEAdvertisementData adv;
