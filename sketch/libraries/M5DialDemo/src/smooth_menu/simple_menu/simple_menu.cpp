@@ -21,9 +21,18 @@ namespace SMOOTH_MENU {
     }
 
 
+    Simple_Menu::~Simple_Menu()
+    {
+        if (_owns_camera) delete _camera;
+        if (_owns_selector) delete _selector;
+        if (_owns_menu) delete _menu;
+    }
+
+
     void Simple_Menu::init(Menu_t* menu, Selector_t* selector, Camrea_t* camera)
     {
         /* Init menu */
+        _owns_menu = (menu == nullptr);
         if (menu == nullptr) {
             _menu = new Menu_t;
         }
@@ -32,6 +41,7 @@ namespace SMOOTH_MENU {
         }
 
         /* Init selector */
+        _owns_selector = (selector == nullptr);
         if (selector == nullptr) {
             _selector = new Selector_t;
         }
@@ -41,6 +51,7 @@ namespace SMOOTH_MENU {
         _selector->setMenu(_menu);
 
         /* Init camera */
+        _owns_camera = (camera == nullptr);
         if (camera == nullptr) {
             _camera = new Camrea_t;
         }

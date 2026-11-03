@@ -61,6 +61,34 @@ class BuildPartitionsTest(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("upload.maximum_size=1572864", out)
 
+    def assertMaximum(self, csv, size):
+        rc, out, err = self.run_build(csv)
+        self.assertEqual(rc, 0, err)
+        self.assertIn(f"upload.maximum_size={size}", out)
+
+    def test_numeric_app_type_counts_as_app(self):
+        # why: ESP-IDF accepts the app type as 0x00 (or 0); data types are 0x01 and up
+        self.assertMaximum("factory, 0x00, factory, 0x10000, 0x300000,\n", 3145728)
+        self.assertMaximum("factory, 0, factory, 0x10000, 2M,\n", 2097152)
+
+    def test_mixed_type_spellings_pick_the_first_app(self):
+        self.assertMaximum(
+            "nvs,  0x01, nvs,   0x9000,  0x5000,\n"
+            "app0, 0x00, ota_0, 0x10000, 0x200000,\n"
+            "app1, app,  ota_1, 0x210000, 0x100000,\n", 2097152)
+
+    def test_numeric_data_type_is_not_an_app(self):
+        rc, out, err = self.run_build("nvs, 0x01, nvs, 0x9000, 0x5000,\n")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("no app partition", err)
+
+    def test_decimal_size_comment_lines_and_crlf(self):
+        self.assertMaximum(
+            "# Name, Type, SubType, Offset, Size, Flags\r\n"
+            "   # indented comment\r\n"
+            "\r\n"
+            "factory, app, factory, 65536, 1048576\r\n", 1048576)
+
     def test_table_without_an_app_partition_fails_clearly(self):
         rc, out, err = self.run_build("nvs, data, nvs, 0x9000, 0x5000,\n")
         self.assertNotEqual(rc, 0)

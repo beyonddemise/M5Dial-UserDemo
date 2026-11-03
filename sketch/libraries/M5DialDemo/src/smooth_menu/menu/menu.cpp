@@ -95,6 +95,10 @@ namespace SMOOTH_MENU {
 
     void Menu_t::clearAllItem()
     {
+        // why delete: addItem() news every item, so the menu owns them (M5DialDemo port)
+        for (Item_t* item : _item_list) {
+            delete item;
+        }
         /* Free list */
         std::vector<Item_t*>().swap(_item_list);
     }

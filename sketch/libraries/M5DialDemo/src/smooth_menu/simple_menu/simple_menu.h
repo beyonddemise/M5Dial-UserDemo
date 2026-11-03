@@ -37,6 +37,10 @@ namespace SMOOTH_MENU {
             Camrea_t* _camera;
             SimpleMenuCallback_t* _render_callback;
             bool _first_open;
+            // why: init() news the parts it was not given; only those are freed here
+            bool _owns_menu = false;
+            bool _owns_selector = false;
+            bool _owns_camera = false;
 
             
         public:
@@ -47,7 +51,11 @@ namespace SMOOTH_MENU {
                 _render_callback(nullptr),
                 _first_open(true)
                 { }
-            ~Simple_Menu() = default;
+            /** Frees the menu, selector and camera that init() created, not ones passed in
+             *  (M5DialDemo port: upstream leaked them, a heap loss per MoreMenu open/close). */
+            ~Simple_Menu();
+            Simple_Menu(const Simple_Menu&) = delete;             ///< owns its parts
+            Simple_Menu& operator=(const Simple_Menu&) = delete;  ///< owns its parts
 
 
             inline Menu_t* getMenu() { return _menu; }
