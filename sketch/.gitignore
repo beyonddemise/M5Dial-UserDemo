@@ -1,14 +1,15 @@
 # Project-local toolchain and build output (all re-creatable by tools/setup.sh)
-.arduino/
+# why no trailing slash: worktrees symlink these folders, and git sees a symlink as a file
+/.arduino
 # sketch/ is the Arduino sketchbook: arduino-cli installs third-party libraries into
 # libraries/. Ignore all of them; only our own M5DialDemo (Task 4) is tracked.
 libraries/*
 !libraries/M5DialDemo/
-.build/
-backup/
-tools/.venv/
-tools/bin/
-tools/wasi-sdk/
+/.build
+/backup
+/tools/.venv
+/tools/bin
+/tools/wasi-sdk
 tools/__pycache__/
 tools/tests/__pycache__/
 # Wi-Fi credentials (secrets.example.h is committed)

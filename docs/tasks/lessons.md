@@ -50,3 +50,14 @@
   "restored bit-for-bit what was read on <date>", never "known good", unless the image comes
   from a trusted source (the vendor's binary, or a working unit). Before blaming cables, hubs
   or power, ask the owner about the physical setup or check it; don't infer it from USB IDs.
+
+## 2026-11-03 — Stage files by name; directory-only ignore patterns miss symlinks
+
+- **Mistake:** on the #15 branch I ran `git add sketch`. That worktree links `.arduino`, `backup`
+  and the tool folders to a shared copy, and `sketch/.gitignore` used `backup/`-style patterns,
+  which match directories only. Git records a symlink as a file, so five links to absolute paths
+  on this Mac went into PR #42 and main.
+- **Rule:** stage with explicit paths (`git add <file>...`) and check `git status --short` (or
+  `git diff --cached --stat`) before every commit. Ignore patterns for folders that may be
+  symlinks have no trailing slash (`/backup`, not `backup/`). `tools/tests/test_gitignore.py`
+  guards this.
