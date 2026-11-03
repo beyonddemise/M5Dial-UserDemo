@@ -330,7 +330,7 @@ the sketch and for every library source alike (checked in a `--verbose` build). 
 translation unit of one build sees the same answer. Sketches without a `secrets.h` (the
 examples) and the host tests (`-Isrc` only) get the placeholders.
 
-## Small apps, Tasks 7-12
+## Small apps, Tasks 7-13
 
 ### Shared app helpers (`m5dd_begin.h`)
 
@@ -482,3 +482,32 @@ with `<Class>` = `setAppName()` = the C++ class name.
 - No credentials: a scan never connects, so the app does not include `secrets.h`.
 - Wokwi always reports one AP, `Wokwi-GUEST`; the scenario waits for it to prove `ap_count >= 1`
   (`wait-serial` matches text, not numbers).
+
+### BLE server (`BLE_Server`, Task 13)
+
+| Original (`ble_demo.c`, `gatt_svr.c`, raw NimBLE host)   | Port                                                          |
+|----------------------------------------------------------|---------------------------------------------------------------|
+| `HAL::HAL*` user data                                    | `AppContext*` (`getUserData()`)                               |
+| `ble_demo_start()`: `nvs_flash_init`, `nimble_port_init`, `ble_gatts_add_svcs`, host task | `BleHeartRateServer::begin(name)`: `NimBLEDevice::init` (does the NVS init), `NimBLEServer` + services, `start()` |
+| HRS `0x180D`: `0x2A37` notify, `0x2A38` read = `0x01` (Chest); DIS `0x180A`: `0x2A29` "Apache Mynewt ESP32 devkitC", `0x2A24` "Mynewt HR Sensor demo" | same UUIDs and values (`heart_rate.h`) |
+| name `M5-%lX` of the MAC's upper 32 bits of a little-endian uint64 | same: `M5-` + `mac[5] << 8 \| mac[4]`, unpadded hex (`heart_rate::deviceName`, host-tested) |
+| advertising: flags GEN \| BREDR_UNSUP, TX power, complete name; restart on disconnect | same (`NimBLEAdvertisementData`), `advertiseOnDisconnect(true)` |
+| FreeRTOS timer, 1 s: notify `{0x06, hr}`, hr 90..159 then 90; started on subscribe, stopped + reset to 90 after unsubscribe | `heart_rate::Notifier` polled from `onRunning()` via `loop()`; same payload, period and counter (host-tested) |
+| page redrawn every 1000 ms; `send <hr>` / `no subscribe`  | same; the number is the last *sent* value (upstream showed the next one), `subscribed` before the first |
+| `!encoder.btn.read()` + hold loop -> quit                | `m5dd::buttonClicked()` -> quit                               |
+| `ble_demo_stop()`: `nimble_port_deinit`, `nvs_flash_deinit` | `end()`: stop advertising, disconnect peers, `NimBLEDevice::deinit(true)` (also deletes the server objects); NVS stays up (the Arduino core owns it) |
+| `printf` / `MODLOG_DFLT`                                 | `app: open BLE_Server`, `ble: advertising <name>`, `ble: connected=0\|1`, `ble: subscribed=0\|1`, `ble: heap=<free internal>` (after `end()`), `app: close BLE_Server` |
+
+- **Threading:** NimBLE runs its callbacks on its host task; they only set atomics. Logging, the
+  schedule and `notify()` happen on the app task in `loop()`, so a connect or subscribe shorter
+  than one frame is not logged. NimBLE no longer finds the connection when it reports the
+  unsubscribe of a disconnect, so `onDisconnect` clears the subscription itself.
+- **Device-only:** Wokwi has no BLE. There is no BleServer scenario; the launcher scenario only
+  checks `app: open BLE_Server` / `app: close BLE_Server`. Check on the device with
+  `tools/.venv/bin/python tools/ble_check.py --name M5-<hex>` (scans, connects, reads 0x2A38,
+  subscribes to 0x2A37, passes after 3 increasing values; exit codes in the script header).
+- **Flash:** NimBLE adds ~206 KB; UserDemo is at 89% of the 3 MB `huge_app` partition. NimBLE
+  cannot be trimmed to the peripheral role from the build: on arduino-esp32 3.3.x for the
+  ESP32-S3 the NimBLE host comes precompiled with the core, and the core's `sdkconfig.h` sets
+  all four `CONFIG_BT_NIMBLE_ROLE_*` to 1 before NimBLE-Arduino's
+  `CONFIG_BT_NIMBLE_ROLE_*_DISABLED` options are checked (tried: same binary size to the byte).

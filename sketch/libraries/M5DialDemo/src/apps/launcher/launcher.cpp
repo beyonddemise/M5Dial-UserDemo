@@ -18,6 +18,7 @@
 
 #include "../../dial_encoder.h"
 #include "../../ui_tones.h"
+#include "../ble_server/app_ble_server.h"
 #include "../lcd_test/app_lcd_test.h"
 #include "../rfid_test/app_rfid_test.h"
 #include "../rtc_test/app_rtc_test.h"
@@ -268,7 +269,8 @@ void Launcher::_app_open_callback(uint8_t selectedNum)
         case launcher_layout::SLOT_WIFI_SCAN:
             app_ptr = new MOONCAKE::USER_APP::WiFi_Scan;
             break;
-        case 5:  // MOONCAKE::USER_APP::BLE_Server
+        case launcher_layout::SLOT_BLE_SERVER:
+            app_ptr = new MOONCAKE::USER_APP::BLE_Server;
             break;
         case launcher_layout::SLOT_TEMP_DEMO:  // upstream VideoShit
             app_ptr = new MOONCAKE::USER_APP::TempDemo;
