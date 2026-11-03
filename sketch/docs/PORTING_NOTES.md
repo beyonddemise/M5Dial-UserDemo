@@ -220,6 +220,9 @@ external) and ties the RFID/touch RST inputs high.
   - job `scenario` runs only on `workflow_dispatch` and on pull requests (opened, synchronize,
     ready_for_review) that touch `sketch/sim/**`, `sketch/examples/**`, `sketch/libraries/M5DialDemo/**`,
     `sketch/UserDemo/**` or the workflow, and only for same-repo PRs, so fork PRs never get `WOKWI_CLI_TOKEN`;
+  - on pull requests it is **opt-in**: it runs only while the PR carries the `sim` label (adding the
+    label starts a run); otherwise it is skipped, which passes branch protection. Since the first real
+    run (PR #38) a full run costs ~20 CI minutes, too much for every push;
   - `concurrency` per ref with cancel-in-progress, so a newer commit stops the older run.
 - **One Wokwi session per sketch:** DialProbe's checks (init, RTC, button, touch, encoder, RFID) are
   the steps of one scenario, `sim/scenarios/DialProbe/probe.test.yaml`. The loop runs every

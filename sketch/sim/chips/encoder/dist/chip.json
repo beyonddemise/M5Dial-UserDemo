@@ -1,0 +1,9 @@
+{
+  "name": "Rotary Encoder",
+  "author": "Stephan Wissel",
+  "pins": ["A", "B", "VCC", "GND"],
+  "controls": [
+    { "id": "steps", "label": "Turn by (detents, + = clockwise)", "type": "range", "min": -20, "max": 20, "step": 1 },
+    { "id": "edgeIntervalUs", "label": "Edge interval (us)", "type": "range", "min": 1, "max": 100000, "step": 1 }
+  ]
+}

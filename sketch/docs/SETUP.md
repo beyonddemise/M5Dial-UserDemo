@@ -56,7 +56,8 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    - VSCode task **Sim test**: pick a sketch and a scenario; runs `tools/sim.sh <sketch> <scenario>`.
    - Command line: `sketch/tools/sim.sh sketch/examples/DialProbe sketch/sim/scenarios/DialProbe/probe.test.yaml`.
    - The free Wokwi plan has a monthly CI-minute quota; every scenario run (local or CI) counts against it.
-     CI therefore runs scenarios only on same-repo pull requests and manual dispatch (see PORTING_NOTES "CI").
+     CI therefore runs scenarios only on manual dispatch and on same-repo pull requests labelled `sim`
+     (see PORTING_NOTES "CI").
 
 ## Known environment quirk
 

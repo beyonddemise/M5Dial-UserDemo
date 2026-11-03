@@ -2,14 +2,16 @@
 # Early subset of the full CI (Task 17 extends this: host tests, build matrix).
 # Job `chips`: chip host tests (no Wokwi) - on every push to port/** for early feedback.
 # Job `scenario`: every sketch/sim/scenarios/<Sketch>/*.test.yaml against examples/<Sketch>
-# (or <Sketch>, e.g. UserDemo) - only on workflow_dispatch and same-repo pull requests,
-# because each scenario costs Wokwi CI minutes (free-plan monthly quota).
+# (or <Sketch>, e.g. UserDemo) - only on workflow_dispatch and on same-repo pull requests that
+# carry the `sim` label, because each scenario costs Wokwi CI minutes (free-plan monthly quota).
+# Adding the label starts a run; without it the job is skipped (a skipped job passes branch
+# protection). Opt-in since the first real run (PR #38): a full run is ~20 CI minutes.
 name: sim
 
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, ready_for_review]
+    types: [opened, synchronize, ready_for_review, labeled]
     paths:
       - 'sketch/sim/**'
       - 'sketch/examples/**'
@@ -25,9 +27,14 @@ on:
 permissions:
   contents: read
 
-# why: a newer run for the same ref supersedes the old one (no Wokwi minutes for stale commits)
+# why: a newer run for the same ref supersedes the old one (no Wokwi minutes for stale commits).
+# A label event for any label other than `sim` gets its own group (run id): its scenario job is
+# skipped, and in the shared group it would cancel a running scenario job and show a pass.
 concurrency:
-  group: sim-${{ github.ref }}
+  group: >-
+    sim-${{ github.ref }}${{
+    github.event.action == 'labeled' && github.event.label.name != 'sim'
+    && format('-label-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -42,11 +49,14 @@ jobs:
 
   scenario:
     needs: chips
-    # why: never on push (quota); on PRs only from this repo, so fork PRs never see the token
+    # why: never on push (quota); on PRs only from this repo, so fork PRs never see the token;
+    # only with the `sim` label, and on a `labeled` event only when that label was the one added
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'sim') &&
+       (github.event.action != 'labeled' || github.event.label.name == 'sim'))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

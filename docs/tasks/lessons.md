@@ -32,6 +32,13 @@
 - **Rule:** before a design depends on a third-party API for timing-critical I/O, read its source
   for the exact pins/board and search its open issues. Address review comments before merging.
 
+## 2026-10-30 — Never chain review replies after a commit with `;`
+
+- **Mistake:** `git add` failed (path under an ignored dir), the `&&` chain stopped before commit/push,
+  but the reply commands ran on separate lines and posted "Fixed in :" with an empty sha.
+- **Rule:** gate thread replies on a verified pushed sha (`[ -n "$sha" ] && git branch -r --contains "$sha"`)
+  in the same `&&` chain; for tracked files in ignored dirs use `git add -u <path>`.
+
 ## 2026-11-03 — A checksum proves a copy, not a healthy device; don't diagnose from topology guesses
 
 - **Mistake:** after a factory restore whose readback matched the backup's sha256, I called the
