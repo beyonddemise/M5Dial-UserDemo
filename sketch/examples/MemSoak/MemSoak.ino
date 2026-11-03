@@ -6,10 +6,12 @@
  *
  * Each cycle: WiFi_Scan runs until its scan has completed (`wifi: ap_count=<n>`, n may be 0)
  * or 20 s pass, then is destroyed; BLE_Server runs for 5 s, then is destroyed; then
- * `heap: free=<n> min=<n>` (MALLOC_CAP_INTERNAL, current and lowest since boot).
+ * `heap: free=<n> min=<n>` (MALLOC_CAP_INTERNAL, current and lowest since boot), read 200 ms
+ * after the close. The first cycle's free heap is the baseline; a later cycle more than 4 KB
+ * below it fails as `heap leak` (after a `heap: baseline=<n>` line).
  * After three good cycles it logs `soak: done`, a success-only line. Any failure logs
- * `soak: FAIL <reason>` (`wifi timeout`, `wifi quit`, `ble quit`, `alloc wifi`, `alloc ble`)
- * and stops; the sketch then idles and never restarts by itself.
+ * `soak: FAIL <reason>` (`wifi timeout`, `wifi quit`, `ble quit`, `heap leak`, `alloc wifi`,
+ * `alloc ble`) and stops; the sketch then idles and never restarts by itself.
  * Sequencing: mem_soak.h (host-tested). Device check (no scenario: Wokwi has no BLE):
  *   tools/device_test.py examples/MemSoak --expect 'heap: free=\d+ min=\d+' \
  *     'heap: free=\d+ min=\d+' 'heap: free=\d+ min=\d+' 'soak: done' \
@@ -40,6 +42,10 @@ using mem_soak::Phase;
 using mem_soak::Step;
 
 constexpr uint32_t IDLE_MS = 100;  ///< loop() period once the soak is over
+/// wait after closing a cycle's app before reading the heap
+/// (why: the idle task frees the stacks of tasks that WiFi.mode(WIFI_OFF) and NimBLE deinit
+/// deleted only when it next runs; reading at once would count them as lost)
+constexpr uint32_t HEAP_SETTLE_MS = 200;
 
 M5Canvas canvas(&M5Dial.Display);
 // why one icon sprite for both apps: createSprite() at the same size reuses the buffer, so
@@ -116,18 +122,34 @@ void run_soak() {
                 close_app(app);
                 log_fail();
                 return;
-            case Step::CycleEnd:
+            case Step::CycleEnd: {
                 close_app(app);
-                M5_LOGI("heap: free=%u min=%u",
-                        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                delay(HEAP_SETTLE_MS);
+                uint32_t free_bytes = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+                M5_LOGI("heap: free=%u min=%u", (unsigned)free_bytes,
                         (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
-                if (soak.succeeded()) {
+                Step verdict = soak.cycleHeap(free_bytes);
+                if (verdict == Step::Fail) {
+                    M5_LOGE("heap: baseline=%u", (unsigned)soak.heapBaseline());
+                    log_fail();
+                    return;
+                }
+                if (verdict == Step::Done) {
                     M5_LOGI("soak: done");
                     return;
                 }
-                [[fallthrough]];
+                app = open_app(soak.phase());
+                if (app == nullptr) {
+                    soak.fail("alloc wifi");
+                    log_fail();
+                    return;
+                }
+                break;
+            }
+            case Step::Done:  // only cycleHeap() returns it
+                break;
             case Step::Switch:
-                close_app(app);  // no-op after CycleEnd
+                close_app(app);
                 app = open_app(soak.phase());
                 if (app == nullptr) {
                     soak.fail(soak.phase() == Phase::Wifi ? "alloc wifi" : "alloc ble");

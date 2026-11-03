@@ -114,6 +114,15 @@ void begin(const char* sketchName, M5Canvas& canvas) {
 
 bool rfidPresent() { return rfid_present; }
 
+void flushLog() {
+    // why all three: M5_LOG* goes through printf to the UART0 console (stdout's buffer, then
+    // the UART hardware FIFO, which a reset or power-off discards); Serial (USB-CDC) is
+    // flushed for the device's own port
+    std::fflush(stdout);
+    esp_rom_output_tx_wait_idle(0);
+    Serial.flush();
+}
+
 void runStandalone(MOONCAKE::APP_BASE& app, AppContext& ctx) {
     app.setUserData(&ctx);
     app.onSetup();
@@ -125,12 +134,8 @@ void runStandalone(MOONCAKE::APP_BASE& app, AppContext& ctx) {
             app.onDestroy();
             M5_LOGI("app: restart");
             // why: a standalone sketch has no launcher to return to; restarting re-opens the
-            // app. Drain every log path first: M5_LOG* goes through printf to the UART0
-            // console, whose hardware FIFO a reset discards (the Wokwi scenarios lost
-            // "app: close"/"app: restart" this way); Serial (USB-CDC) is flushed for the device.
-            std::fflush(stdout);
-            esp_rom_output_tx_wait_idle(0);
-            Serial.flush();
+            // app. flushLog() first: the Wokwi scenarios lost "app: close"/"app: restart"
+            flushLog();
             ESP.restart();
         }
     }

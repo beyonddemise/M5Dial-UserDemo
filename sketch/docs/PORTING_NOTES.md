@@ -525,12 +525,16 @@ with `<Class>` = `setAppName()` = the C++ class name.
 | `approxSin` row curve, `255 - abs(dy) * 2` text grey in a `uint8_t` | same maths (`more_menu_items::curveOffsetX / textShade`); the grey is clamped at 0 (upstream converted negative floats to `uint8_t`, undefined behaviour) |
 | `fillSmoothRoundRectInDifference` (a method the original added to its vendored LovyanGFX) | `_invert_round_rect()` in the render callback: inside the rounded rect, black pixels become the selector orange and all others black, as upstream; exact mask (`more_menu_items::inRoundRect`), without upstream's anti-aliased corner edge |
 | "Quit" -> `destroyApp()`                                 | same; logs `more: selected Quit`, then `app: close MoreMenu`  |
-| "Power Off": black screen, `rtc.clearIRQ()` + `disableIRQ()`, `delay(500)`, `hal->powerOff()`, `delay(4000)`, `hal->powerOn()` | logs `power: off` + `Serial.flush()` first, then black screen, `M5Dial.Rtc.clearIRQ()` + `disableIRQ()`, `delay(500)`, `M5Dial.Power.powerOff()` |
+| "Power Off": black screen, `rtc.clearIRQ()` + `disableIRQ()`, `delay(500)`, `hal->powerOff()`, `delay(4000)`, `hal->powerOn()` | logs `power: off` and drains the console first, then black screen, `M5Dial.Rtc.clearIRQ()` + `disableIRQ()`, `delay(500)`, a 4 s timer wake, `M5Dial.Power.powerOff()` |
 
-- **No `powerOn()` fallback:** M5Unified's `powerOff()` pulses the hold pin (GPIO46) low and then
+- **Recovery on USB power:** M5Unified's `powerOff()` pulses the hold pin (GPIO46) low and then
   calls `esp_deep_sleep_start()`, so it never returns. Upstream's HAL only released the hold pin,
-  so on USB power the chip kept running and re-took the hold pin after 4 s. On USB power the port stays in deep sleep instead; the
-  physical check is in Task 19.
+  so on USB power the chip kept running and re-took the hold pin after 4 s. The port arms a 4 s
+  deep-sleep timer wake (`esp_sleep_enable_timer_wakeup`) before `powerOff()`. Without it nothing
+  wakes the Dial on USB power: M5Unified arms no wake source for the M5Dial, and the front button
+  (GPIO42) is not an RTC GPIO. On battery the supply is cut at the first hold-pin pulse, so the
+  timer never fires. On USB the Dial reboots to the launcher after ~4 s (upstream returned to the
+  menu without a reboot); the physical check is in Task 19.
 - **Launcher slot 7** now opens `MoreMenu`; the launcher keeps the black (not icon-coloured)
   open/close animation for it, as upstream.
 - **Scenarios:** `sim/scenarios/UserDemo/more_menu_quit.test.yaml` (Quit -> `app: close
@@ -548,12 +552,18 @@ with `<Class>` = `setAppName()` = the C++ class name.
   Each cycle runs WiFi_Scan until its scan has completed (n = 0 APs counts) or 20 s pass, then
   BLE_Server for 5 s. The phase clock starts after `onCreate()`, so NimBLE start-up does not use
   up the 5 s. Three cycles in all, each followed by `heap: free=<n> min=<n>` (internal heap: now,
-  and the lowest since boot).
-- **Verdict:** `soak: done` is logged only after three good cycles. Any failure logs
-  `soak: FAIL <reason>` and stops, and the sketch then idles without restarting. The reasons are
-  `wifi timeout`, `wifi quit` / `ble quit` (the app closed itself, e.g. after a button click),
-  and `alloc wifi` / `alloc ble`. Failures are sticky, and a scan that completes in the same frame
-  as the timeout or a click still counts as done.
+  and the lowest since boot), read 200 ms after the close so the idle task has freed the stacks
+  of the tasks Wi-Fi off and NimBLE deinit deleted.
+- **Leak check:** the first cycle's free heap is the baseline; the first Wi-Fi and BLE init
+  allocate once (NVS, PHY calibration, NimBLE pools), which is not a leak. A later cycle more
+  than `LEAK_TOLERANCE` (4 KB) below the baseline logs `heap: baseline=<n>` and fails as
+  `heap leak` (`mem_soak::Sequencer::cycleHeap()`, host-tested). Without it the soak only printed
+  the numbers, and an 8 KB loss per cycle would still have ended in `soak: done`.
+- **Verdict:** `soak: done` is logged only after three good cycles that passed the leak check.
+  Any failure logs `soak: FAIL <reason>` and stops, and the sketch then idles without
+  restarting. The reasons are `wifi timeout`, `wifi quit` / `ble quit` (the app closed itself,
+  e.g. after a button click), `heap leak`, and `alloc wifi` / `alloc ble`. Failures are sticky,
+  and a scan that completes in the same frame as the timeout or a click still counts as done.
 - **Done seam:** `WiFi_Scan::scanDone()`. It returns true from the frame that logged
   `wifi: ap_count=<n>`, and is the only addition to the Wi-Fi app. A failed scan never sets it,
   so it shows up as `wifi timeout` after 20 s.

@@ -1,7 +1,8 @@
 /**
  * @file test_mem_soak.cpp
  * @brief mem_soak::Sequencer: the MemSoak cycle state machine (Wi-Fi scan until done or 20 s,
- *        BLE for 5 s, three cycles), its timeouts and the success-only verdict.
+ *        BLE for 5 s, three cycles), its timeouts, the heap-leak check against the first
+ *        cycle's free heap, and the success-only verdict.
  */
 #include <cstring>
 
@@ -28,6 +29,8 @@ Step run_good_cycle(Sequencer& s, uint32_t& now) {
     return s.poll(now, false, false);
 }
 
+constexpr uint32_t HEAP = 150000;  ///< free internal heap after the warm-up cycle
+
 }  // namespace
 
 HOST_TEST(soak_defaults_are_three_cycles_20s_wifi_timeout_5s_ble) {
@@ -48,17 +51,77 @@ HOST_TEST(soak_three_good_cycles_end_in_done_with_a_cycle_end_each) {
     uint32_t now = 1000;
     HT_EQ((int)Step::CycleEnd, (int)run_good_cycle(s, now));
     HT_EQ(1, s.cyclesDone());
+    HT_EQ((int)Phase::Heap, (int)s.phase());
+    HT_EQ((int)Step::Switch, (int)s.cycleHeap(HEAP));
     HT_EQ((int)Phase::Wifi, (int)s.phase());
     HT_EQ(false, s.finished());
     HT_EQ((int)Step::CycleEnd, (int)run_good_cycle(s, now));
     HT_EQ(2, s.cyclesDone());
+    HT_EQ((int)Step::Switch, (int)s.cycleHeap(HEAP - 100));
     HT_EQ(false, s.succeeded());
     HT_EQ((int)Step::CycleEnd, (int)run_good_cycle(s, now));
     HT_EQ(3, s.cyclesDone());
+    HT_EQ(false, s.succeeded());  // why: not before the last cycle's heap was checked
+    HT_EQ((int)Step::Done, (int)s.cycleHeap(HEAP + 2000));
     HT_EQ((int)Phase::Done, (int)s.phase());
     HT_EQ(true, s.finished());
     HT_EQ(true, s.succeeded());
     HT_EQ((int)Step::Idle, (int)s.poll(now + 1, true, false));
+    HT_EQ((int)Step::Idle, (int)s.cycleHeap(1));
+}
+
+HOST_TEST(soak_first_cycle_is_the_baseline_even_when_it_is_low) {
+    // why: the first Wi-Fi and BLE init allocate once (NVS, PHY calibration, NimBLE pools);
+    // the soak looks for heap lost per cycle after that warm-up
+    Sequencer s(2);
+    uint32_t now = 0;
+    run_good_cycle(s, now);
+    HT_EQ((int)Step::Switch, (int)s.cycleHeap(90000));
+    HT_EQ(90000, (int)s.heapBaseline());
+    run_good_cycle(s, now);
+    HT_EQ((int)Step::Done, (int)s.cycleHeap(90000 - mem_soak::LEAK_TOLERANCE));
+}
+
+HOST_TEST(soak_heap_lost_per_cycle_fails_as_a_leak) {
+    // why: a leak of 8 KB per open/close must fail the soak, not just show in the log
+    Sequencer s;
+    uint32_t now = 0;
+    run_good_cycle(s, now);
+    HT_EQ((int)Step::Switch, (int)s.cycleHeap(HEAP));
+    run_good_cycle(s, now);
+    HT_EQ((int)Step::Fail, (int)s.cycleHeap(HEAP - 8192));
+    HT_EQ((int)Phase::Failed, (int)s.phase());
+    HT_EQ(0, std::strcmp("heap leak", s.failReason()));
+    HT_EQ(false, s.succeeded());
+}
+
+HOST_TEST(soak_leak_tolerance_is_inclusive_and_4_kb) {
+    HT_EQ(4096, (int)mem_soak::LEAK_TOLERANCE);
+    Sequencer ok(2), leak(2);
+    uint32_t t1 = 0, t2 = 0;
+    run_good_cycle(ok, t1);
+    ok.cycleHeap(HEAP);
+    run_good_cycle(ok, t1);
+    HT_EQ((int)Step::Done, (int)ok.cycleHeap(HEAP - mem_soak::LEAK_TOLERANCE));
+    run_good_cycle(leak, t2);
+    leak.cycleHeap(HEAP);
+    run_good_cycle(leak, t2);
+    HT_EQ((int)Step::Fail, (int)leak.cycleHeap(HEAP - mem_soak::LEAK_TOLERANCE - 1));
+}
+
+HOST_TEST(soak_waits_in_heap_phase_until_the_reading_comes) {
+    Sequencer s;
+    uint32_t now = 0;
+    HT_EQ((int)Step::CycleEnd, (int)run_good_cycle(s, now));
+    HT_EQ((int)Step::CycleEnd, (int)s.poll(now + 50000, true, true));  // no timeout, no quit
+    HT_EQ((int)Phase::Heap, (int)s.phase());
+}
+
+HOST_TEST(soak_cycle_heap_outside_the_heap_phase_does_nothing) {
+    Sequencer s;
+    HT_EQ((int)Step::Run, (int)s.cycleHeap(HEAP));
+    HT_EQ((int)Phase::Wifi, (int)s.phase());
+    HT_EQ(0, s.cyclesDone());
 }
 
 HOST_TEST(soak_wifi_scan_with_zero_aps_counts_as_done) {
@@ -86,7 +149,9 @@ HOST_TEST(soak_wifi_timeout_in_a_later_cycle_still_fails) {
     Sequencer s;
     uint32_t now = 0;
     HT_EQ((int)Step::CycleEnd, (int)run_good_cycle(s, now));
+    s.cycleHeap(HEAP);
     HT_EQ((int)Step::CycleEnd, (int)run_good_cycle(s, now));
+    s.cycleHeap(HEAP);
     s.appStarted(now);
     HT_EQ((int)Step::Fail, (int)s.poll(now + mem_soak::WIFI_TIMEOUT_MS, false, false));
     HT_EQ(2, s.cyclesDone());
@@ -157,6 +222,7 @@ HOST_TEST(soak_fail_after_done_does_not_turn_success_into_failure) {
     HT_EQ((int)Step::Switch, (int)s.poll(1, true, false));
     s.appStarted(1);
     HT_EQ((int)Step::CycleEnd, (int)s.poll(101, false, false));
+    HT_EQ((int)Step::Done, (int)s.cycleHeap(HEAP));
     HT_EQ(true, s.succeeded());
     HT_EQ((int)Step::Idle, (int)s.fail("late"));
     HT_EQ(true, s.succeeded());
