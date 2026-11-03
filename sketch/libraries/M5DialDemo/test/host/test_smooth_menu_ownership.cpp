@@ -16,8 +16,13 @@
 
 namespace {
 long live_allocations = 0;  ///< operator new calls minus operator delete calls (non-null)
+bool fail_next_alloc = false;  ///< set to make the next operator new throw std::bad_alloc
 
 void* counted_alloc(std::size_t size) {
+    if (fail_next_alloc) {
+        fail_next_alloc = false;
+        throw std::bad_alloc();
+    }
     void* p = std::malloc(size ? size : 1);
     if (p == nullptr) throw std::bad_alloc();
     ++live_allocations;
@@ -134,4 +139,21 @@ HOST_TEST(simple_menu_reinit_with_its_own_part_keeps_that_part) {
         menu.update(0, false);  // the kept selector now serves the new menu
     }
     HT_EQ(0L, live_allocations - before);  // still owned: freed by ~Simple_Menu
+}
+
+HOST_TEST(simple_menu_reinit_that_fails_to_allocate_keeps_a_valid_part) {
+    long before = live_allocations;
+    {
+        SMOOTH_MENU::Simple_Menu menu;
+        build_like_more_menu(menu);
+        fail_next_alloc = true;  // the first replacement part of the re-init cannot be allocated
+        bool threw = false;
+        try {
+            menu.init();
+        } catch (const std::bad_alloc&) {
+            threw = true;
+        }
+        HT_EQ(true, threw);
+    }  // why: ~Simple_Menu must not free a part twice after the failed re-init
+    HT_EQ(0L, live_allocations - before);
 }

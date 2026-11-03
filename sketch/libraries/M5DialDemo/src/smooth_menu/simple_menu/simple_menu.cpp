@@ -47,10 +47,16 @@ namespace SMOOTH_MENU {
     static void adopt(T*& part, bool& owns, T* incoming)
     {
         // why: init(nullptr, getSelector(), nullptr) hands back an owned part; keep it, still owned
-        if (incoming != nullptr && incoming == part) return;
-        if (owns) delete part;
+        if (incoming != nullptr && incoming == part) {
+            return;
+        }
+        // why: allocate before freeing, so a throwing new leaves the old part in place, still owned
+        T* next = (incoming == nullptr) ? new T : incoming;
+        if (owns) {
+            delete part;
+        }
+        part = next;
         owns = (incoming == nullptr);
-        part = owns ? new T : incoming;
     }
 
 
