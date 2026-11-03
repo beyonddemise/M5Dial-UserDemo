@@ -5,6 +5,7 @@ under this folder; the ESP-IDF project is untouched.
 
 - Toolchain and first-time setup: [docs/SETUP.md](docs/SETUP.md)
 - Pinned versions: [tools/deps.txt](tools/deps.txt)
+- Factory test and its IO jig: [docs/FACTORY_TEST_JIG.md](docs/FACTORY_TEST_JIG.md)
 - Everyday commands (after `tools/setup.sh`):
   - `tools/build.sh examples/DialProbe`
   - `tools/upload.sh examples/DialProbe`

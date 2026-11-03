@@ -3,19 +3,21 @@
  * @brief The M5Dial UserDemo: the launcher with all demo apps (port of main/main.cpp).
  *
  * Boot: hold the button for more than 1 s while powering on to enter the factory test
- * (ENABLE_FACTORY_TEST, config.h; not ported yet - logs `factory: not ported` and continues
- * with the launcher). Otherwise the launcher runs forever.
+ * (ENABLE_FACTORY_TEST, config.h; double tone, then MOONCAKE::USER_APP::FactoryTest, which
+ * ends with a power-off - docs/FACTORY_TEST_JIG.md). Otherwise the launcher runs forever.
  *
  * Optional secrets.h (git-ignored, `cp secrets.example.h secrets.h`): Wi-Fi credentials for the
  * factory test, picked up by M5DialDemo's config.h if present.
  * Partition table: partitions.csv in this folder (4 MB app, no OTA, no FAT; tools/build.sh
  * size-checks against it).
- * Scenarios: sim/scenarios/UserDemo/{launcher,more_menu_quit,power_off}.test.yaml.
+ * Scenarios: sim/scenarios/UserDemo/{launcher,more_menu_quit,power_off,enter,skip_io,
+ * io_leds}.test.yaml.
  * Log lines: `boot: UserDemo`,
  * `launcher: ready`, `launcher: select <index> <name>`, `app: open <Class>` / `app: close <Class>`
- * (ported apps), `app: <name> not ported`.
+ * (ported apps), `app: <name> not ported`; factory test: `factory: ...` (app_factory_test.h).
  */
 #include <M5DialDemo.h>
+#include <apps/factory_test/app_factory_test.h>
 #include <apps/launcher/launcher.h>
 
 // why: explicit prototypes - arduino-cli's prototype generator is unreliable on this setup
@@ -62,8 +64,12 @@ void setup() {
         M5Dial.Speaker.tone(FACTORY_TONE_HZ, FACTORY_TONE_MS);
         delay(50);
         M5Dial.Speaker.tone(FACTORY_TONE_HZ, FACTORY_TONE_MS);
-        // TODO(Task 15): run MOONCAKE::USER_APP::FactoryTest here instead of the launcher
-        M5_LOGI("factory: not ported");
+        // why a local (as upstream main.cpp): onCreate() runs every step and ends with the
+        // power-off, so the launcher below is never reached in factory mode
+        MOONCAKE::USER_APP::FactoryTest factory_test;
+        factory_test.setUserData(&ctx);
+        factory_test.onSetup();
+        factory_test.onCreate();
     }
 #endif
 

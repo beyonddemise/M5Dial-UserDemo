@@ -1,0 +1,95 @@
+# UserDemo on the virtual M5Dial: the whole factory test with operator verdicts - LCD PASS,
+# RTC PASS, RFID (card read) PASS, IO (pot) SKIP - then the summary line and the RTC wake-up.
+# Own Wokwi session: the factory test ends with a power-off.
+# Run: tools/sim.sh UserDemo sim/scenarios/UserDemo/skip_io.test.yaml
+# NOT RUN YET (Wokwi quota exhausted; written in Task 15, run in #19).
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, enc = encoder chip on GPIO41/40
+# (`enc.steps` = detents, positive = clockwise, 0 re-arms), rfid = ws1850s (cardPresent,
+# uid0..uid3), pot = wokwi-potentiometer on GPIO1 (`position` 0.0..1.0).
+# Verdict prompt (verdict_prompt.h): PASS / FAIL / SKIP, starts on PASS, clockwise = next,
+# a click confirms. A "click" below = press 200 ms, release.
+name: 'UserDemo: factory test, IO skipped'
+version: 1
+steps:
+  # --- enter: hold > 1 s at boot, release (see enter.test.yaml)
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - wait-serial: 'boot: UserDemo'
+  - wait-serial: 'app: open FactoryTest'
+  - wait-serial: 'factory: step LCD'
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open LCD_Test'
+
+  # --- LCD: click ends the step, click confirms PASS (the default)
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close LCD_Test'
+  - wait-serial: 'factory: prompt LCD'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: verdict LCD=PASS'
+
+  # --- RTC: wait for a time line, click ends the step, click confirms PASS
+  - wait-serial: 'factory: step RTC'
+  - wait-serial: 'app: open RTC_Test'
+  - wait-serial: 'rtc: '
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close RTC_Test'
+  - wait-serial: 'factory: prompt RTC'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: verdict RTC=PASS'
+
+  # --- RFID: present card 04:A1:B2:C3, remove it, click ends the step, click confirms PASS
+  # why the UID before cardPresent: see sim/scenarios/RfidTest/card.test.yaml
+  - wait-serial: 'factory: step RFID'
+  - wait-serial: 'rfid: ready'
+  - set-control: { part-id: rfid, control: uid0, value: 4 }
+  - set-control: { part-id: rfid, control: uid1, value: 161 }
+  - set-control: { part-id: rfid, control: uid2, value: 178 }
+  - set-control: { part-id: rfid, control: uid3, value: 195 }
+  - set-control: { part-id: rfid, control: cardPresent, value: 1 }
+  - wait-serial: 'rfid: uid=04:A1:B2:C3'
+  - set-control: { part-id: rfid, control: cardPresent, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close RFID_Test'
+  - wait-serial: 'factory: prompt RFID'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: verdict RFID=PASS'
+
+  # --- IO: pot to the middle, an io line (logged every 800 ms), click ends the step
+  - wait-serial: 'factory: step IO'
+  - set-control: { part-id: pot, control: position, value: 0.5 }
+  - wait-serial: 'factory: io adc='
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: prompt IO'
+
+  # --- two clockwise detents: PASS -> FAIL -> SKIP (Review Focus 3), click confirms SKIP
+  # why the delay: the highlight move logs nothing; 2 detents x 4 edges x 40 ms = 320 ms
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  - set-control: { part-id: enc, control: steps, value: 2 }
+  - delay: 600ms
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: verdict IO=SKIP'
+
+  # --- summary, then a click arms the RTC alarm and powers off
+  - wait-serial: 'factory: LCD=PASS RTC=PASS RFID=PASS IO=SKIP'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: rtc wakeup in 4 s'

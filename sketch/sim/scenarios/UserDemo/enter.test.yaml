@@ -1,0 +1,24 @@
+# UserDemo on the virtual M5Dial: holding the button > 1 s at boot enters the factory test
+# (ENABLE_FACTORY_TEST), which starts with the LCD step once the button is released.
+# Own Wokwi session: the factory test ends with a power-off, nothing else runs in this boot.
+# Run: tools/sim.sh UserDemo sim/scenarios/UserDemo/enter.test.yaml
+# NOT RUN YET (Wokwi quota exhausted; written in Task 15, run in #19).
+#
+# Parts (sim/diagram.json): btn = front button GPIO42 (pressed 1 = down).
+name: 'UserDemo: factory test entry'
+version: 1
+steps:
+  # --- button held from t=0 through the 1 s check
+  # why waiting for the log lines instead of a fixed delay: boot time varies; `app: open
+  # FactoryTest` is only logged after the button stayed down > 1000 ms, and the extra 200 ms
+  # makes the hold at least 1.2 s
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - wait-serial: 'boot: UserDemo'
+  - wait-serial: 'app: open FactoryTest'
+  - wait-serial: 'factory: step LCD'
+  - delay: 200ms
+
+  # --- release: the intro screen waits for it (Review Focus 1: the wait calls M5Dial.update())
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open LCD_Test'
+  - wait-serial: 'lcd: pattern 0'

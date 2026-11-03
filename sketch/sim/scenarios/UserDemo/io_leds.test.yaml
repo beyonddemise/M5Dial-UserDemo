@@ -1,0 +1,57 @@
+# UserDemo on the virtual M5Dial: the factory test's IO step maps the pot to the LED ring as the
+# original io_test.cpp (io_led_level.h): 0 V -> level 6 (whole ring), 3.3 V -> level 0.
+# Own Wokwi session (the factory test is only entered at boot).
+# Run: tools/sim.sh UserDemo sim/scenarios/UserDemo/io_leds.test.yaml
+# NOT RUN YET (Wokwi quota exhausted; written in Task 15, run in #19).
+#
+# Parts (sim/diagram.json): btn = front button GPIO42, pot = wokwi-potentiometer on GPIO1
+# (`position` 0.0 = 0 V .. 1.0 = 3.3 V), ring = wokwi-led-ring (14 px) on GPIO2.
+# The LCD, RTC and RFID steps are clicked through with the default verdicts.
+# why a later wait matches only new lines: wait-serial continues after the previous match, so
+# `leds=0` can only come from a reading taken after the pot moved to 3.3 V
+name: 'UserDemo: factory IO step, pot to LED level'
+version: 1
+steps:
+  # --- enter: hold > 1 s at boot, release (see enter.test.yaml)
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - wait-serial: 'boot: UserDemo'
+  - wait-serial: 'app: open FactoryTest'
+  - wait-serial: 'factory: step LCD'
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+
+  # --- LCD, RTC, RFID: click to end each step, click to confirm the default
+  - wait-serial: 'app: open LCD_Test'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: prompt LCD'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open RTC_Test'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: prompt RTC'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: step RFID'
+  - wait-serial: 'rfid: ready'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'factory: prompt RFID'
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+
+  # --- IO: pot at 0 V -> 3000 - 0 > 2900 -> 3000 / 500 = 6
+  - wait-serial: 'factory: step IO'
+  - set-control: { part-id: pot, control: position, value: 0 }
+  - wait-serial: 'leds=6 i2c=['
+
+  # --- pot at 3.3 V -> 3000 - ~3300 < 0 -> 0 (truncation, clamped)
+  - set-control: { part-id: pot, control: position, value: 1 }
+  - wait-serial: 'leds=0 i2c=['
