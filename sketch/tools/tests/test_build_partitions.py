@@ -1,5 +1,6 @@
 """build.sh: a sketch with its own partitions.csv is size-checked against that table's app
-partition (upload.maximum_size), not the board menu's PartitionScheme."""
+partition (upload.maximum_size), not the board menu's PartitionScheme; a sketch with its own
+lv_conf.h gets LVGL's LV_CONF_INCLUDE_SIMPLE plus an include path to the sketch dir."""
 import os
 import shutil
 import stat
@@ -17,9 +18,10 @@ def _exe(path, text):
 
 
 class BuildPartitionsTest(unittest.TestCase):
-    def run_build(self, csv):
-        """Run a copy of build.sh on sketch Foo (with `csv` as Foo/partitions.csv unless None)
-        against a stub arduino-cli; return (exit code, stub's argv line, stderr)."""
+    def run_build(self, csv, lv_conf=False, extra_flags=None):
+        """Run a copy of build.sh on sketch Foo (with `csv` as Foo/partitions.csv unless None,
+        an empty Foo/lv_conf.h if `lv_conf`, M5DIAL_EXTRA_FLAGS=`extra_flags` unless None) against
+        a stub arduino-cli; return (exit code, stub's argv line, stderr)."""
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         tools = os.path.join(tmp.name, "tools")
@@ -31,10 +33,17 @@ class BuildPartitionsTest(unittest.TestCase):
         if csv is not None:
             with open(os.path.join(sketch, "partitions.csv"), "w") as f:
                 f.write(csv)
+        if lv_conf:
+            open(os.path.join(sketch, "lv_conf.h"), "w").close()
+        self.sketch = sketch
         log = os.path.join(tmp.name, "log")
         _exe(os.path.join(tools, "bin", "arduino-cli"), '#!/usr/bin/env bash\necho "cli:$*" >> "$LOG"\n')
+        env = dict(os.environ, LOG=log)
+        env.pop("M5DIAL_EXTRA_FLAGS", None)
+        if extra_flags is not None:
+            env["M5DIAL_EXTRA_FLAGS"] = extra_flags
         proc = subprocess.run([os.path.join(tools, "build.sh"), sketch],
-                              env=dict(os.environ, LOG=log), capture_output=True, text=True)
+                              env=env, capture_output=True, text=True)
         out = open(log).read() if os.path.exists(log) else ""
         return proc.returncode, out, proc.stderr
 
@@ -94,6 +103,50 @@ class BuildPartitionsTest(unittest.TestCase):
         self.assertNotEqual(rc, 0)
         self.assertIn("partitions.csv", err)
         self.assertEqual(out, "")
+
+
+class BuildLvConfTest(unittest.TestCase):
+    """build.sh: lv_conf.h in the sketch dir switches on LVGL's simple include, for C and C++."""
+
+    run_build = BuildPartitionsTest.run_build  # why not subclass: would rerun those tests
+
+    def test_without_lv_conf_no_lvgl_flags_are_added(self):
+        rc, out, err = self.run_build(None)
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn("LV_CONF_INCLUDE_SIMPLE", out)
+        self.assertNotIn("extra_flags", out)
+
+    def test_lv_conf_adds_define_and_include_path_for_c_and_cpp(self):
+        rc, out, err = self.run_build(None, lv_conf=True)
+        self.assertEqual(rc, 0, err)
+        flags = '-DLV_CONF_INCLUDE_SIMPLE "-I%s"' % self.sketch
+        # why both: LVGL itself is C, the sketch is C++; each recipe has its own extra_flags
+        self.assertIn("--build-property compiler.c.extra_flags=" + flags, out)
+        self.assertIn("--build-property compiler.cpp.extra_flags=" + flags, out)
+
+    def test_lv_conf_and_partitions_csv_combine(self):
+        rc, out, err = self.run_build("factory, app, factory, 0x10000, 4M,\n", lv_conf=True)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("upload.maximum_size=4194304", out)
+        self.assertIn("compiler.cpp.extra_flags=-DLV_CONF_INCLUDE_SIMPLE", out)
+
+
+    def test_caller_flags_are_merged_not_clobbered(self):
+        # why: sim.sh's -DM5DD_SIM and the lv_conf.h flags share compiler.*.extra_flags; two
+        # --build-property values for one key would leave only one of them
+        rc, out, err = self.run_build(None, lv_conf=True, extra_flags="-DM5DD_SIM")
+        self.assertEqual(rc, 0, err)
+        flags = '-DM5DD_SIM -DLV_CONF_INCLUDE_SIMPLE "-I%s"' % self.sketch
+        self.assertIn("compiler.c.extra_flags=" + flags, out)
+        self.assertIn("compiler.cpp.extra_flags=" + flags, out)
+        self.assertEqual(out.count("extra_flags="), 2)
+
+    def test_caller_flags_alone_without_lv_conf(self):
+        rc, out, err = self.run_build(None, extra_flags="-DM5DD_SIM")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("--build-property compiler.cpp.extra_flags=-DM5DD_SIM ", out)
+        self.assertIn("--build-property compiler.c.extra_flags=-DM5DD_SIM ", out)
+        self.assertNotIn("LV_CONF", out)
 
 
 if __name__ == "__main__":

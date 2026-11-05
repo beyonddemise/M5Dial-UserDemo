@@ -6,6 +6,9 @@
 # overwrites the device build)
 # A sketch with its own partitions.csv (e.g. UserDemo) is size-checked against that table's
 # first app partition instead of the board menu's PartitionScheme.
+# A sketch with its own lv_conf.h (e.g. examples/LvglDemo) is built with LVGL's
+# LV_CONF_INCLUDE_SIMPLE and the sketch dir on the include path, for C and C++ sources.
+# Env M5DIAL_EXTRA_FLAGS: further compiler flags for C and C++ (merged with the above).
 set -euo pipefail
 # shellcheck disable=SC1091
 . "$(dirname "$0")/env.sh"
@@ -41,7 +44,21 @@ if [ -f "$dir/partitions.csv" ]; then
   [ -n "$max_size" ] || { echo "build.sh: no app partition in $dir/partitions.csv" >&2; exit 65; }
 fi
 
+# why: LVGL 9 otherwise looks for lv_conf.h next to its own folder (sketch/libraries/), which
+# would be shared by every sketch; the sketch-local file needs the define plus -I<sketch dir>.
+# compiler.{c,cpp}.extra_flags are empty in the core's platform.txt (reserved for the user),
+# so setting them clobbers nothing; C too, because LVGL itself is C. The quotes keep a path
+# with spaces in one argument (arduino-cli splits recipes quote-aware).
+# why M5DIAL_EXTRA_FLAGS (e.g. sim.sh's -DM5DD_SIM) instead of a caller --build-property:
+# a second value for the same key would replace these, not add to them.
+extra="${M5DIAL_EXTRA_FLAGS:-}"
+[ -f "$dir/lv_conf.h" ] && extra="${extra:+$extra }-DLV_CONF_INCLUDE_SIMPLE \"-I$dir\""
+flag_args=()
+[ -n "$extra" ] && flag_args=(--build-property "compiler.c.extra_flags=$extra"
+                              --build-property "compiler.cpp.extra_flags=$extra")
+
 exec arduino-cli compile --config-file "$ARDUINO_CLI_CONFIG" --fqbn "$M5DIAL_FQBN_FULL" \
   --build-path "${M5DIAL_BUILD_DIR:-$SKETCH_ROOT/.build/$name}" \
   ${M5DIAL_CTAGS_DIR:+--build-property "tools.ctags.path=$M5DIAL_CTAGS_DIR"} \
-  ${max_size:+--build-property "upload.maximum_size=$max_size"} "${@:2}" "$dir"
+  ${max_size:+--build-property "upload.maximum_size=$max_size"} \
+  ${flag_args[@]+"${flag_args[@]}"} "${@:2}" "$dir"

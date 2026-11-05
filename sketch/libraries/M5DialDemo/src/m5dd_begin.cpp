@@ -83,7 +83,7 @@ void sim_route_panel_miso() {
 
 namespace m5dd {
 
-void begin(const char* sketchName, M5Canvas& canvas) {
+void begin(const char* sketchName) {
 #ifdef M5DD_SIM
     sim_route_panel_miso();
 #endif
@@ -105,7 +105,10 @@ void begin(const char* sketchName, M5Canvas& canvas) {
 
     rfid_present = probe_rfid() && init_rfid();
     M5_LOGI("init: rfid %s", rfid_present ? "ok" : "missing");
+}
 
+void begin(const char* sketchName, M5Canvas& canvas) {
+    begin(sketchName);
     canvas.setColorDepth(CANVAS_BPP);
     if (!canvas.createSprite(CANVAS_SIZE, CANVAS_SIZE)) {
         M5_LOGE("boot: canvas alloc failed (%d free)", (int)ESP.getFreeHeap());

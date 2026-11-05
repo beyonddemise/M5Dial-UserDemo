@@ -27,6 +27,15 @@ namespace m5dd {
  */
 void begin(const char* sketchName, M5Canvas& canvas);
 
+/**
+ * Same bring-up as begin(sketchName, canvas), without the 240x240 canvas: for sketches that
+ * render some other way (e.g. examples/LvglDemo, whose LVGL draws into its own small buffer),
+ * so the 115 KB sprite is never allocated.
+ *
+ * @param sketchName name logged in the boot line (tests match on it)
+ */
+void begin(const char* sketchName);
+
 /** @return true if begin() found the RFID reader and initialised it (M5Dial.Rfid usable). */
 bool rfidPresent();
 

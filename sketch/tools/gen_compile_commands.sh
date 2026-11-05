@@ -5,8 +5,7 @@ set -euo pipefail
 # shellcheck disable=SC1091
 . "$(dirname "$0")/env.sh"
 dir="$(cd "${1:-$SKETCH_ROOT/examples/DialProbe}" && pwd)"; name="$(basename "$dir")"
-arduino-cli compile --config-file "$ARDUINO_CLI_CONFIG" --fqbn "$M5DIAL_FQBN_FULL" \
-  --only-compilation-database --build-path "$SKETCH_ROOT/.build/$name" \
-  ${M5DIAL_CTAGS_DIR:+--build-property "tools.ctags.path=$M5DIAL_CTAGS_DIR"} "$dir"
+# why via build.sh: same flags as the real build (e.g. a sketch's lv_conf.h include path)
+M5DIAL_BUILD_DIR="$SKETCH_ROOT/.build/$name" "$TOOLS_DIR/build.sh" "$dir" --only-compilation-database
 # why: tools look for the database at a fixed, sketch-independent location
 cp "$SKETCH_ROOT/.build/$name/compile_commands.json" "$SKETCH_ROOT/.build/compile_commands.json"
