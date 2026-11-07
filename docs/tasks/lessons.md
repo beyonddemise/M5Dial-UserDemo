@@ -68,6 +68,6 @@
   builds were committed to main without a `.gitmodules`. Nothing noticed until a CI change set
   `persist-credentials: false`: `actions/checkout` then ran `git submodule foreach`, which
   fails on an undeclared gitlink, and every job failed at checkout (PR #45).
-- **Rule:** keep worktrees and scratch output in an ignored folder (`/.superpowers/` in the root
+- **Rule:** keep worktrees and scratch output in an ignored folder (`/.superpowers` in the root
   `.gitignore`), and before committing check `git diff --cached --stat` for paths outside the
   change. `tools/tests/test_gitignore.py` fails if the tree tracks any gitlink.

@@ -59,11 +59,15 @@ class RepoTreeTest(unittest.TestCase):
         gitlinks = [line.split("\t", 1)[1] for line in out.splitlines() if line.startswith("160000")]
         self.assertEqual([], gitlinks)
 
-    def test_superpowers_working_folder_is_ignored(self):
-        proc = subprocess.run(["git", "-C", REPO, "-c", "core.excludesFile=" + os.devnull,
-                               "check-ignore", "--no-index", "-q", ".superpowers/wt-99"])
-        self.assertEqual(0, proc.returncode)
-
+    def test_superpowers_working_folder_is_ignored_as_a_symlink(self):
+        # why a symlink in a scratch repo: `/.superpowers/` would match a real folder only
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        subprocess.run(["git", "init", "-q", "--template=", tmp.name], check=True)
+        shutil.copy(os.path.join(REPO, ".gitignore"), tmp.name)
+        os.mkdir(os.path.join(tmp.name, "shared"))
+        os.symlink(os.path.join(tmp.name, "shared"), os.path.join(tmp.name, ".superpowers"))
+        self.assertTrue(_ignored(tmp.name, ".superpowers"))
 
 if __name__ == "__main__":
     unittest.main()
