@@ -3,8 +3,9 @@
 Arduino-sketch port of the ESP-IDF M5Dial UserDemo (`../main`). Everything lives under this
 folder; the ESP-IDF project is untouched. The port calls the M5Dial API directly
 (`M5Dial.Display`, `M5Dial.BtnA`, `M5Dial.Touch`, `M5Dial.Rtc`, ...); shared code is the
-`libraries/M5DialDemo` library. Most sketches also run on a virtual M5Dial in Wokwi (not
-BleServer and MemSoak: Wokwi has no BLE). See
+`libraries/M5DialDemo` library. Most sketches also have Wokwi scenarios for a virtual M5Dial (not
+BleServer and MemSoak: Wokwi has no BLE); simulation is not reliable yet, sketches hang shortly
+after boot ([#39](https://github.com/beyonddemise/M5Dial-UserDemo/issues/39)). See
 [PORTING_NOTES](docs/PORTING_NOTES.md#sim-fallback--dm5dd_sim) for the simulator's limits.
 
 ## Docs

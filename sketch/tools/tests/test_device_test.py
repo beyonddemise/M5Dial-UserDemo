@@ -244,9 +244,6 @@ class CaptureTest(unittest.TestCase):
         cap.assert_called_once()
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class RepeatedOptionTest(unittest.TestCase):
     def test_repeated_forbid_keeps_every_pattern(self):
@@ -268,3 +265,7 @@ class RepeatedOptionTest(unittest.TestCase):
             self.assertEqual(1, device_test.main(["sk", "--no-upload", "--port", "/dev/x",
                                                   "--expect", "a", "--expect", "b"]))
         self.assertEqual(["a", "b"], cap.call_args[0][1])
+
+
+if __name__ == "__main__":
+    unittest.main()

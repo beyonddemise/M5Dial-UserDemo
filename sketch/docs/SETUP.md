@@ -2,6 +2,10 @@
 
 Verified on macOS 26 (Apple Silicon). CI builds on ubuntu-24.04. Linux and WSL2 are untested
 by hand. Native Windows is **not supported** (`setup.sh` stops there): use WSL2.
+On Ubuntu/WSL2, install `python3-venv` first; if a failed run left `sketch/tools/.venv`, delete it
+before retrying (setup.sh skips the venv step once its python exists). WSL2 does not see USB
+devices by itself: attach the Dial with [usbipd-win](https://learn.microsoft.com/windows/wsl/connect-usb)
+before the backup step.
 Commands below start at the repository root.
 All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quotes them.
 
