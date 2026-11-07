@@ -1,6 +1,0 @@
-#!/bin/bash
-# Log argv + copy the input file, then delegate to the repo wrapper.
-L=/Users/stw/Code/M5Dial-UserDemo/.superpowers/scratch-ctags/argv
-printf '%q ' "$@" > "$L.txt"; echo >> "$L.txt"
-cp "${*: -1}" "$L.input.cpp"
-exec /Users/stw/Code/M5Dial-UserDemo/.superpowers/wt-pr24/sketch/tools/ctags/ctags "$@"

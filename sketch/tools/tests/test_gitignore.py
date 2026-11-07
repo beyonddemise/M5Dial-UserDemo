@@ -10,6 +10,7 @@ import tempfile
 import unittest
 
 SKETCH = os.path.join(os.path.dirname(__file__), "..", "..")
+REPO = os.path.join(SKETCH, "..")
 LOCAL = (".arduino", ".build", "backup", "tools/.venv", "tools/bin", "tools/wasi-sdk")
 
 
@@ -47,6 +48,21 @@ class GitignoreTest(unittest.TestCase):
                      "libraries/M5DialDemo/library.properties"):
             with self.subTest(path=path):
                 self.assertFalse(_ignored(self.repo, path))
+
+
+class RepoTreeTest(unittest.TestCase):
+    def test_repo_tracks_no_gitlinks(self):
+        # why: actions/checkout runs `git submodule foreach`, which fails on a gitlink (mode
+        # 160000) that .gitmodules does not declare - a committed worktree folder breaks all CI
+        out = subprocess.run(["git", "-C", REPO, "ls-files", "-s"], capture_output=True,
+                             text=True, check=True).stdout
+        gitlinks = [line.split("\t", 1)[1] for line in out.splitlines() if line.startswith("160000")]
+        self.assertEqual([], gitlinks)
+
+    def test_superpowers_working_folder_is_ignored(self):
+        proc = subprocess.run(["git", "-C", REPO, "-c", "core.excludesFile=" + os.devnull,
+                               "check-ignore", "--no-index", "-q", ".superpowers/wt-99"])
+        self.assertEqual(0, proc.returncode)
 
 
 if __name__ == "__main__":
