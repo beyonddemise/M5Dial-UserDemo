@@ -6,7 +6,7 @@ On Ubuntu/WSL2, install `python3-venv` first; if a failed run left `sketch/tools
 before retrying (setup.sh skips the venv step once its python exists). WSL2 does not see USB
 devices by itself: attach the Dial with [usbipd-win](https://learn.microsoft.com/windows/wsl/connect-usb)
 before the backup step. If the port is there but cannot be opened, check its group
-(`ls -l /dev/ttyACM0`, usually `dialout`), run `sudo usermod -aG dialout "$USER"`, log in again.
+(`ls -l "$(sketch/tools/.venv/bin/python sketch/tools/find_port.py)"`, usually `dialout`), run `sudo usermod -aG dialout "$USER"`, log in again.
 Commands below start at the repository root.
 All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quotes them.
 
