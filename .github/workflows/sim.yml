@@ -1,6 +1,6 @@
 # Runs the Arduino port's Wokwi scenarios on the virtual M5Dial (sketch/sim).
-# Early subset of the full CI (Task 17 extends this: host tests, build matrix).
-# Job `chips`: chip host tests (no Wokwi) - on every push to port/** for early feedback.
+# Build, host tests, Python tool tests and chip host tests/wasm builds (no Wokwi quota) are in
+# sketch.yml; this workflow holds only the quota-spending job.
 # Job `scenario`: every sketch/sim/scenarios/<Sketch>/*.test.yaml against examples/<Sketch>
 # (or <Sketch>, e.g. UserDemo) - only on workflow_dispatch and on same-repo pull requests that
 # carry the `sim` label, because each scenario costs Wokwi CI minutes (free-plan monthly quota).
@@ -17,11 +17,9 @@ on:
       - 'sketch/examples/**'
       - 'sketch/libraries/M5DialDemo/**'
       - 'sketch/UserDemo/**'
-      - '.github/workflows/sim.yml'
-  push:
-    branches: ['port/**']
-    paths:
-      - 'sketch/sim/chips/**'
+      # why: the scenario toolchain (sim.sh, sim_ci.sh, build.sh, setup.sh, deps.txt pins of
+      # wokwi-cli and the core); still label-gated, so no extra quota
+      - 'sketch/tools/**'
       - '.github/workflows/sim.yml'
 
 permissions:
@@ -38,17 +36,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  chips:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Chip host tests
-        # why: native cc + python3 only; the wasm builds run in the scenario job (needs wasi-sdk)
-        run: for m in sketch/sim/chips/*/Makefile; do make -C "$(dirname "$m")" test; done
-
   scenario:
-    needs: chips
     # why: never on push (quota); on PRs only from this repo, so fork PRs never see the token;
     # only with the `sim` label, and on a `labeled` event only when that label was the one added
     if: >-
@@ -61,6 +49,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        # why: no step uses git after checkout; keep the token out of .git/config
+        with:
+          persist-credentials: false
 
       - name: Read pinned versions
         id: deps
@@ -87,9 +78,13 @@ jobs:
       - name: Setup toolchain
         run: sketch/tools/setup.sh
 
-      - name: Tool unit tests
-        # why: covers sim_ci.sh retry/quota verdicts, which the scenario step cannot when Wokwi is unavailable
-        run: sketch/tools/.venv/bin/python -m unittest discover sketch/tools/tests
+      - name: Quota gate (chip host tests, sim_ci verdict tests)
+        # why: the full test suite runs in sketch.yml, but scenarios must not spend Wokwi minutes
+        # on a broken chip model or a broken quota/retry verdict in sim_ci.sh (both were the
+        # `needs: chips` + tool-test gate here before sketch.yml existed); seconds, no quota
+        run: |
+          for m in sketch/sim/chips/*/Makefile; do make -C "$(dirname "$m")" test; done
+          sketch/tools/.venv/bin/python -m unittest discover -s sketch/tools/tests -p test_sim_ci.py
 
       - name: Run scenarios
         env:

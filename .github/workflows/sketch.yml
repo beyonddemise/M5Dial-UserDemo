@@ -1,0 +1,118 @@
+# Builds and tests the Arduino port (sketch/) - everything that needs no Wokwi quota.
+# The Wokwi scenarios run in sim.yml (same-repo PRs + workflow_dispatch only, quota-safe).
+# Job `chips`: Wokwi chip host tests (native cc, no toolchain).
+# Job `host`:  M5DialDemo host unit tests (tools/test_host.sh, native c++).
+# Job `build`: toolchain setup, Python tool tests, chip wasm builds (wasi-sdk) and a device
+#              build of UserDemo + every examples/* sketch (tools/build_all.sh), flash use in
+#              the step summary.
+name: sketch
+
+on:
+  workflow_dispatch:
+  pull_request:
+    # why no ready_for_review: drafts already build on `opened`; it would rebuild the same SHA
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'sketch/**'
+      - '.github/workflows/sketch.yml'
+  # why push on main only: every port/** branch is built through its PR; pushing to both would
+  # run the same commit twice
+  push:
+    branches: [main]
+    paths:
+      - 'sketch/**'
+      - '.github/workflows/sketch.yml'
+
+permissions:
+  contents: read
+
+# why cancel only on PRs: a newer PR commit supersedes the old run, but on main every pushed
+# (merged) commit keeps its own run - main has no other CI record of whether a commit built
+concurrency:
+  group: sketch-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  chips:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        # why: no step uses git after checkout; keep the token out of .git/config
+        with:
+          persist-credentials: false
+      - name: Chip host tests
+        # why: native cc + python3 only; the wasm builds run in the build job (needs wasi-sdk)
+        run: for m in sketch/sim/chips/*/Makefile; do make -C "$(dirname "$m")" test; done
+
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        # why: no step uses git after checkout; keep the token out of .git/config
+        with:
+          persist-credentials: false
+      - name: Host unit tests
+        # why: clang++ (preinstalled on the runner) like the macOS dev hosts, so -Werror sees the
+        # same warning set locally and in CI
+        env:
+          CXX: clang++
+        run: sketch/tools/test_host.sh
+
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        # why: no step uses git after checkout; keep the token out of .git/config
+        with:
+          persist-credentials: false
+
+      - name: Read pinned versions
+        id: deps
+        # why: sketch/tools/deps.txt is the single source of truth for versions
+        run: |
+          . sketch/tools/deps.txt
+          echo "arduino_cli=$ARDUINO_CLI_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Cache toolchain
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            sketch/.arduino
+            sketch/tools/bin
+            sketch/tools/wasi-sdk
+            sketch/tools/.venv
+          # why: same key as sim.yml's scenario job, so both workflows share one cache entry
+          key: sim-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('sketch/tools/deps.txt', 'sketch/tools/setup.sh') }}
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
+        with:
+          version: ${{ steps.deps.outputs.arduino_cli }}
+
+      - name: Setup toolchain
+        id: setup
+        # why: setup.sh has no --ci flag; it is idempotent and non-interactive as is
+        run: sketch/tools/setup.sh
+
+      # why: the steps below each run once the toolchain is there, even if an earlier one
+      # failed, so one red run reports every broken part (Python tests, chips, sketches)
+      - name: Tool unit tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: sketch/tools/.venv/bin/python -m unittest discover sketch/tools/tests
+
+      - name: Build chips (wasm)
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          for m in sketch/sim/chips/*/Makefile; do
+            make -C "$(dirname "$m")" WASI_SDK_PATH="$GITHUB_WORKSPACE/sketch/tools/wasi-sdk"
+          done
+
+      - name: Build sketches
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        # why: UserDemo + every examples/*/ found by glob; all attempted, step fails if any
+        # failed; flash use per sketch goes to the step summary (tools/tests/test_build_all.py).
+        # No secrets.h copy: config.h includes it only via __has_include (placeholders otherwise).
+        run: sketch/tools/build_all.sh
