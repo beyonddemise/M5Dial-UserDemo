@@ -10,6 +10,7 @@ import tempfile
 import unittest
 
 SKETCH = os.path.join(os.path.dirname(__file__), "..", "..")
+REPO = os.path.join(SKETCH, "..")
 LOCAL = (".arduino", ".build", "backup", "tools/.venv", "tools/bin", "tools/wasi-sdk")
 
 
@@ -48,6 +49,25 @@ class GitignoreTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(_ignored(self.repo, path))
 
+
+class RepoTreeTest(unittest.TestCase):
+    def test_repo_tracks_no_gitlinks(self):
+        # why: actions/checkout runs `git submodule foreach`, which fails on a gitlink (mode
+        # 160000) that .gitmodules does not declare - a committed worktree folder breaks all CI
+        out = subprocess.run(["git", "-C", REPO, "ls-files", "-s"], capture_output=True,
+                             text=True, check=True).stdout
+        gitlinks = [line.split("\t", 1)[1] for line in out.splitlines() if line.startswith("160000")]
+        self.assertEqual([], gitlinks)
+
+    def test_superpowers_working_folder_is_ignored_as_a_symlink(self):
+        # why a symlink in a scratch repo: `/.superpowers/` would match a real folder only
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        subprocess.run(["git", "init", "-q", "--template=", tmp.name], check=True)
+        shutil.copy(os.path.join(REPO, ".gitignore"), tmp.name)
+        os.mkdir(os.path.join(tmp.name, "shared"))
+        os.symlink(os.path.join(tmp.name, "shared"), os.path.join(tmp.name, ".superpowers"))
+        self.assertTrue(_ignored(tmp.name, ".superpowers"))
 
 if __name__ == "__main__":
     unittest.main()
