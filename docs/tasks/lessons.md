@@ -61,3 +61,13 @@
   `git diff --cached --stat`) before every commit. Ignore patterns for folders that may be
   symlinks have no trailing slash (`/backup`, not `backup/`). `tools/tests/test_gitignore.py`
   guards this.
+
+## 2026-11-07 — Local working folders stay out of the tree
+
+- **Mistake:** the agent worktrees under `.superpowers/` (gitlinks, mode 160000) and its scratch
+  builds were committed to main without a `.gitmodules`. Nothing noticed until a CI change set
+  `persist-credentials: false`: `actions/checkout` then ran `git submodule foreach`, which
+  fails on an undeclared gitlink, and every job failed at checkout (PR #45).
+- **Rule:** keep worktrees and scratch output in an ignored folder (`/.superpowers` in the root
+  `.gitignore`), and before committing check `git diff --cached --stat` for paths outside the
+  change. `tools/tests/test_gitignore.py` fails if the tree tracks any gitlink.

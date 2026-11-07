@@ -3,3 +3,6 @@ build
 managed_components
 
 /sdkconfig.old
+
+# Local agent working folders (worktrees, scratch builds) - never part of the repo
+/.superpowers
