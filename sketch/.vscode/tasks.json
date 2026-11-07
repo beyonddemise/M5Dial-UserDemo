@@ -42,7 +42,12 @@
                   "sim/scenarios/TempDemo/temp_demo.test.yaml",
                   "sim/scenarios/RfidTest/card.test.yaml",
                   "sim/scenarios/WifiScan/scan.test.yaml",
-                  "sim/scenarios/LvglDemo/knob.test.yaml"],
+                  "sim/scenarios/LvglDemo/knob.test.yaml",
+                  "sim/scenarios/UserDemo/more_menu_quit.test.yaml",
+                  "sim/scenarios/UserDemo/power_off.test.yaml",
+                  "sim/scenarios/UserDemo/enter.test.yaml",
+                  "sim/scenarios/UserDemo/skip_io.test.yaml",
+                  "sim/scenarios/UserDemo/io_leds.test.yaml"],
       "default": "sim/scenarios/DialProbe/probe.test.yaml" },
     { "id": "expect", "type": "promptString", "description": "Regex expected in the serial log",
       "default": "init: " }
