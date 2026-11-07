@@ -176,8 +176,9 @@ def main(argv: Optional[list] = None) -> int:
     """CLI entry point."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("sketch")
-    ap.add_argument("--expect", nargs="+", default=[], metavar="REGEX")
-    ap.add_argument("--forbid", nargs="+", default=[], metavar="REGEX")
+    # why extend: a repeated --expect/--forbid adds patterns; `store` would drop the earlier ones
+    ap.add_argument("--expect", nargs="+", action="extend", default=[], metavar="REGEX")
+    ap.add_argument("--forbid", nargs="+", action="extend", default=[], metavar="REGEX")
     ap.add_argument("--timeout", type=float, default=20)
     ap.add_argument("--no-upload", action="store_true")
     ap.add_argument("--port", help="explicit serial port (skips auto-detection)")

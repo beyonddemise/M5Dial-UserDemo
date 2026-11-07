@@ -1,7 +1,7 @@
 # Setup
 
-Verified on macOS 26 (Apple Silicon). Linux, Windows and WSL2 are **untested**
-by hand; CI builds on ubuntu-24.04 (first run still pending).
+Verified on macOS 26 (Apple Silicon). CI builds on ubuntu-24.04. Linux and WSL2 are untested
+by hand. Native Windows is **not supported** (`setup.sh` stops there): use WSL2.
 Commands below start at the repository root.
 All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quotes them.
 
@@ -60,13 +60,15 @@ All versions are pinned in [`tools/deps.txt`](../tools/deps.txt); this page quot
    once for IntelliSense.
    Tests: `sketch/tools/.venv/bin/python -m unittest discover sketch/tools/tests` (Python tools) and
    `sketch/tools/test_host.sh` (C++ host tests of the library; needs a host `c++`).
-9. **Virtual M5Dial (Wokwi):** install the recommended Wokwi VSCode extension and get a CI token
+9. **Virtual M5Dial (Wokwi):** needs `make` (Xcode Command Line Tools on macOS,
+   `build-essential` on Linux), which builds the chips. Install the recommended Wokwi VSCode extension and get a CI token
    at https://wokwi.com/dashboard/ci (`export WOKWI_CLI_TOKEN=...`).
    - VSCode task **Simulate**: pick a sketch; it builds the sim variant and the chips
      (`tools/sim.sh <sketch> --prepare-only`), then starts the Wokwi panel on `sim/wokwi.toml`
      (select that file once with "Wokwi: Select Config File").
    - VSCode task **Sim test**: pick a sketch and a scenario; runs `tools/sim.sh <sketch> <scenario>`.
-     The pick-list offers every scenario under `sim/scenarios/`; add new ones there too.
+     The pick-list is a static list in `.vscode/tasks.json` (input `scenario`): a new file under
+     `sim/scenarios/` appears there only once you add it to that list too.
    - Command line: `sketch/tools/sim.sh sketch/examples/DialProbe sketch/sim/scenarios/DialProbe/probe.test.yaml`.
    - The free Wokwi plan has a monthly CI-minute quota; every scenario run (local or CI) counts against it.
      CI therefore runs scenarios only on manual dispatch and on same-repo pull requests labelled `sim`

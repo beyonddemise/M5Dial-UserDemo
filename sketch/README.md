@@ -3,7 +3,9 @@
 Arduino-sketch port of the ESP-IDF M5Dial UserDemo (`../main`). Everything lives under this
 folder; the ESP-IDF project is untouched. The port calls the M5Dial API directly
 (`M5Dial.Display`, `M5Dial.BtnA`, `M5Dial.Touch`, `M5Dial.Rtc`, ...); shared code is the
-`libraries/M5DialDemo` library. Every sketch also runs on a virtual M5Dial in Wokwi.
+`libraries/M5DialDemo` library. Most sketches also run on a virtual M5Dial in Wokwi (not
+BleServer and MemSoak: Wokwi has no BLE). See
+[PORTING_NOTES](docs/PORTING_NOTES.md#sim-fallback--dm5dd_sim) for the simulator's limits.
 
 ## Docs
 
@@ -39,6 +41,7 @@ From this folder, after [first-time setup](docs/SETUP.md):
 tools/build.sh UserDemo
 tools/upload.sh UserDemo          # needs the flash backup first (tools/backup_flash.sh)
 tools/monitor.sh
+# device_test.py uploads the sketch it tests: this replaces UserDemo with DialProbe
 tools/.venv/bin/python tools/device_test.py examples/DialProbe --expect 'boot: DialProbe' 'init: rfid ok' 'init: display 240x240' 'init: rtc ok' 'init: touch ok' 'rtc: 20'
 tools/sim.sh examples/DialProbe sim/scenarios/DialProbe/probe.test.yaml   # needs WOKWI_CLI_TOKEN
 tools/test_host.sh                                    # C++ host tests of the library

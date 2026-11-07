@@ -10,8 +10,12 @@ Background for every item: [PORTING_NOTES.md](PORTING_NOTES.md). Jig wiring:
 
 Run every command from the `sketch/` folder.
 
-- [ ] A verified flash backup exists. **Do:** `tools/check_backup.sh`. **Expect:** exit 0. If not:
-  `tools/backup_flash.sh` (device connected), then check again.
+- [ ] **This** Dial has a backup of its own factory flash. `tools/check_backup.sh` only proves
+  that some intact backup exists, not that it came from the connected Dial. **Do:** for a Dial
+  that has never been flashed, run `tools/backup_flash.sh` before the first upload, then
+  `tools/check_backup.sh` (**Expect:** exit 0). Write the Dial's MAC
+  (`tools/.venv/bin/python -m esptool read_mac`) next to the new `.bin` in `backup/`. Only an image
+  read before any upload is a factory backup; name a later read differently.
 - [ ] The Dial is found. **Do:** `tools/.venv/bin/python tools/find_port.py`. **Expect:** it prints
   one port (VID:PID `303A:1001`), exit 0. If none: hold **G0** (the small button on the StampS3) while you plug in
   USB, then release (download mode).
@@ -132,13 +136,14 @@ already flashed. A serial monitor for the manual steps: `tools/monitor.sh` (1152
 ## MemSoak (`examples/MemSoak`)
 
 - [ ] **Do:**
-  `tools/.venv/bin/python tools/device_test.py examples/MemSoak --expect 'heap: free=\d+ min=\d+' 'heap: free=\d+ min=\d+' 'heap: free=\d+ min=\d+' 'soak: done' --forbid 'boot: MemSoak.*boot: MemSoak' --forbid 'soak: FAIL' --timeout 180`
+  `tools/.venv/bin/python tools/device_test.py examples/MemSoak --expect 'heap: free=\d+ min=\d+' 'heap: free=\d+ min=\d+' 'heap: free=\d+ min=\d+' 'soak: done' --forbid 'boot: MemSoak.*boot: MemSoak' 'soak: FAIL' --timeout 180`
   **Expect:** PASS (three cycles, no reboot, no `soak: FAIL`).
 - [ ] **Deferred: record the heap.** Copy the three `heap: free=<n> min=<n>` lines and the final
   `min=` into PORTING_NOTES, "Memory soak" and "Heap numbers" (replace "pending").
 
 ## Factory test, bare device (UserDemo)
 
+- [ ] **Do:** `tools/upload.sh UserDemo` (the steps above leave MemSoak flashed).
 - [ ] **Do:** hold the front button while you reset or power the Dial; keep holding.
   **Expect:** after > 1 s a double 4 kHz beep and the "[M5Dial测试]" intro screen; `app: open FactoryTest`.
 - [ ] **Do:** release. LCD step: turn the knob through the pages, touch the screen, click.

@@ -246,3 +246,25 @@ class CaptureTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RepeatedOptionTest(unittest.TestCase):
+    def test_repeated_forbid_keeps_every_pattern(self):
+        # why: with the default `store` action the second --forbid replaced the first, so a
+        # MemSoak run that rebooted could still PASS
+        err = io.StringIO()
+        log = "boot: MemSoak\nboot: MemSoak\nsoak: done\n"
+        with mock.patch.object(device_test, "capture", return_value=log), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = device_test.main(["sk", "--no-upload", "--port", "/dev/x",
+                                     "--forbid", "boot: MemSoak.*boot: MemSoak",
+                                     "--forbid", "soak: FAIL"])
+        self.assertEqual(1, code)
+        self.assertIn("boot: MemSoak", err.getvalue())
+
+    def test_repeated_expect_keeps_every_pattern(self):
+        with mock.patch.object(device_test, "capture", return_value="a\n") as cap, \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(1, device_test.main(["sk", "--no-upload", "--port", "/dev/x",
+                                                  "--expect", "a", "--expect", "b"]))
+        self.assertEqual(["a", "b"], cap.call_args[0][1])
