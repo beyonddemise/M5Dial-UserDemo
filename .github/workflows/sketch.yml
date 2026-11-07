@@ -38,6 +38,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        # why: no step uses git after checkout; keep the token out of .git/config
+        with:
+          persist-credentials: false
       - name: Chip host tests
         # why: native cc + python3 only; the wasm builds run in the build job (needs wasi-sdk)
         run: for m in sketch/sim/chips/*/Makefile; do make -C "$(dirname "$m")" test; done
@@ -47,6 +50,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        # why: no step uses git after checkout; keep the token out of .git/config
+        with:
+          persist-credentials: false
       - name: Host unit tests
         # why: clang++ (preinstalled on the runner) like the macOS dev hosts, so -Werror sees the
         # same warning set locally and in CI
@@ -59,6 +65,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        # why: no step uses git after checkout; keep the token out of .git/config
+        with:
+          persist-credentials: false
 
       - name: Read pinned versions
         id: deps
