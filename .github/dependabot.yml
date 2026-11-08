@@ -1,0 +1,20 @@
+# Dependabot version updates. why only github-actions: it is the one ecosystem here Dependabot
+# can read. Every other pin (Arduino core and libraries, Python venv, wokwi-cli, wasi-sdk) lives
+# in sketch/tools/deps.txt, a custom format; main/ and components/ are the read-only upstream.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # why one group: the workflows share actions (checkout, cache, upload-artifact); one PR a
+    # week keeps the pins in step and costs one CI run instead of one per action
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+    # why: only wecom-digest-forward.yml uses it, a workflow synced from upstream m5stack;
+    # bumping it here would diverge from the next sync
+    ignore:
+      - dependency-name: actions/github-script
