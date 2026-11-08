@@ -26,12 +26,12 @@ class DependabotTest(unittest.TestCase):
         self.assertEqual(2, self.config["version"])
 
     def test_github_actions_are_updated_from_the_repo_root(self):
-        """Exactly one github-actions entry, rooted at "/", on a valid schedule."""
+        """Exactly one github-actions entry, rooted at "/", checked weekly."""
         # why "/": Dependabot looks for workflows in <directory>/.github/workflows
         actions = [u for u in self.config["updates"] if u["package-ecosystem"] == "github-actions"]
         self.assertEqual(1, len(actions))
         self.assertEqual("/", actions[0]["directory"])
-        self.assertIn(actions[0]["schedule"]["interval"], ("daily", "weekly", "monthly"))
+        self.assertEqual("weekly", actions[0]["schedule"]["interval"])
 
     def test_upstream_workflow_actions_are_ignored(self):
         """Every action used only by an upstream-synced workflow is on the ignore list."""
