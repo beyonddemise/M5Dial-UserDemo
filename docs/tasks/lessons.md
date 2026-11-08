@@ -71,3 +71,16 @@
 - **Rule:** keep worktrees and scratch output in an ignored folder (`/.superpowers` in the root
   `.gitignore`), and before committing check `git diff --cached --stat` for paths outside the
   change. `tools/tests/test_gitignore.py` fails if the tree tracks any gitlink.
+
+## 2026-11-08 — A PR can be merged while work on it continues
+
+- **Mistake:** the owner merged #49 and #50 while the agent was still pushing to them. A fix
+  pushed 25 s after #49's merge re-created the deleted branch and never reached main, while its
+  CodeRabbit threads were already marked "Fixed in <sha>". A commit held back for #50 (to avoid
+  restarting its scenario run) was stranded the same way.
+- **Rule:** before every push to a PR branch, check `gh pr view <n> --json state` is `OPEN`. If
+  it was merged, put the commits on a new branch from `origin/main` and open a follow-up PR that
+  names the merged one; never push to the deleted branch name.
+- **Also:** a stale build output can be newer than its source (a tracked `dist/` gets a fresh
+  checkout time), so `make` skips the rebuild. That hid a Wokwi schema change until #48
+  untracked `dist/`; `make zip` now always rebuilds.
