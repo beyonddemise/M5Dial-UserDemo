@@ -414,6 +414,48 @@ class ContributingDocTest(unittest.TestCase):
             with self.subTest(chip=chip):
                 self.assertIn(f"chip-{chip}", text)
 
+    def test_push_authenticates_through_gh(self):
+        """The push in the release block works without a git credential helper set up.
+
+        why: the first real release (chip-encoder v0.1.0) stopped at `git push https://...` with
+        "could not read Username"; gh is the one tool the block already needs logged in.
+        """
+        with open(CONTRIBUTING) as f:
+            text = f.read()
+        pushes = [line for line in text.splitlines()
+                  if line.lstrip().startswith("git") and " push " in line]
+        self.assertEqual(1, len(pushes))
+        # why credential.username=: gh returns nothing for a configured username that is not
+        # the gh account (checked with `gh auth git-credential get`), and git then prompts
+        self.assertIn("git -c credential.helper= -c 'credential.helper=!gh auth git-credential' "
+                      "-c credential.username= push", pushes[0])
+
+    def test_git_version_gate_stops_before_2_26(self):
+        """Step 0 of the release block, run as written against a stubbed `git --version`.
+
+        why a gate: Git before 2.26 can keep a URL-specific credential username despite the
+        push's empty override, and the push would then prompt for a password.
+        """
+        with open(CONTRIBUTING) as f:
+            text = f.read()
+        gate = re.search(r"^# 0\..*?(?=^# 1\.)", text, re.S | re.M).group(0)
+        self.assertNotIn("| sort -", gate)  # why: BusyBox sort lacks -C (and may lack -V)
+        cases = {"2.25.1": False, "2.9.0": False, "2.26.0": True, "2.56.0": True,
+                 "2.39.3 (Apple Git-145)": True, "3.0.0": True}
+        with tempfile.TemporaryDirectory() as stub:
+            git = os.path.join(stub, "git")
+            with open(git, "w") as f:
+                f.write('#!/bin/sh\necho "git version $FAKE_GIT_VERSION"\n')
+            os.chmod(git, 0o755)
+            for version, passes in cases.items():
+                with self.subTest(version=version):
+                    env = dict(os.environ, PATH=stub + os.pathsep + os.environ["PATH"],
+                               FAKE_GIT_VERSION=version)
+                    run = subprocess.run(["bash", "-eu", "-c", gate + "\necho GATE-PASSED"],
+                                         env=env, capture_output=True, text=True)
+                    self.assertEqual(passes, "GATE-PASSED" in run.stdout, run.stderr)
+                    self.assertEqual(passes, run.returncode == 0)
+
 
 if __name__ == "__main__":
     unittest.main()

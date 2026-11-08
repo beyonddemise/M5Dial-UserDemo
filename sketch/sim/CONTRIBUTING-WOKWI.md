@@ -32,8 +32,10 @@ owner's call and happens only on the owner's explicit go (issue #20, step 4).
 ## Status, honestly
 
 The chips pass their host unit tests, build to wasm, and run in this repo's Wokwi scenarios,
-which pass since the #39 fix (PR #50). The board definition has never been loaded in Wokwi. Release the chips as **pre-releases**
-(`v0.1.0`) and say so in the release notes.
+which pass since the #39 fix (PRs #50 and #53). The board definition has never been loaded in
+Wokwi. The chips are released as **pre-releases**: all five `beyonddemise/chip-*` repos carry
+`v0.1.0` (2026-11-09), each `chip.zip` checked to hold exactly `chip.json` and `chip.wasm`.
+Their `example/diagram.json` files have not been opened on wokwi.com yet.
 
 ## Route 1: a chip as a community chip (own repo + release)
 
@@ -59,6 +61,13 @@ chip=gc9a01 ver=0.1.0 bash -eu <<'EOS'
 # chip: encoder | ft3267 | gc9a01 | pcf8563 | ws1850s; ver: the version in its example/diagram.json
 repo=beyonddemise/chip-$chip
 
+# 0. Git 2.26 or later; why: older Git can keep a URL-specific credential username despite
+#    step 4's empty override, and the push would then prompt for a password; plain shell, as
+#    BusyBox sort has no -C
+IFS=. read -r gmaj gmin _ <<<"$(git --version | cut -d' ' -f3)"
+[ "$gmaj" -gt 2 ] || { [ "$gmaj" -eq 2 ] && [ "$gmin" -ge 26 ]; } ||
+  { echo "the release block needs Git 2.26 or later: $(git --version)" >&2; exit 1; }
+
 # 1. history of the chip folder only (root = the chip folder), taken from the merged main;
 #    why no checkout: main may be checked out in another worktree, and the working tree is
 #    never used (step 2 builds from the split commit itself)
@@ -81,7 +90,12 @@ elif [ "$vis" != PUBLIC ]; then
 fi
 
 # 4. publish the history as main (fast-forward only; the split is deterministic)
-git push "https://github.com/$repo.git" "$split:refs/heads/main"
+#    why gh as the credential helper (for this push only): a plain https push stops with "could
+#    not read Username" unless git has credentials set up; gh is already logged in for step 3.
+#    why credential.username= too: gh answers nothing for a configured username that is not
+#    the gh account, and git would then prompt for a password
+git -c credential.helper= -c 'credential.helper=!gh auth git-credential' -c credential.username= push \
+  "https://github.com/$repo.git" "$split:refs/heads/main"
 
 # 5. tag v$ver on the split commit in one API call: it fails if the tag already exists, so a
 #    lookup error can never be mistaken for "no tag"; the release then uses only that tag
