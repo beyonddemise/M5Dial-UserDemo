@@ -688,9 +688,9 @@ The device and the sim run the same sources; the sim build differs only by one f
 ### Sim fallback (`-DM5DD_SIM`)
 
 `tools/sim.sh` always builds with `M5DIAL_EXTRA_FLAGS=-DM5DD_SIM` into `.build/sim/<Name>/`. The
-flag enables exactly one thing; this list is everything the simulation does differently:
+flag enables two things (items 1 and 2); this list is everything the simulation does differently:
 
-1. **Panel MISO route (the only code behind `M5DD_SIM`).** `m5dd::begin()`
+1. **Panel MISO route (code behind `M5DD_SIM`).** `m5dd::begin()`
    (`libraries/M5DialDemo/src/m5dd_begin.cpp`, `sim_route_panel_miso()`) runs it before
    `M5Dial.begin()`, so every sketch that uses `m5dd::begin` gets it (since Task 4; before, it was
    `examples/DialProbe/sim_shims.h`). It calls
@@ -703,13 +703,24 @@ flag enables exactly one thing; this list is everything the simulation does diff
      never takes effect: when the display probe fails, M5Unified's GPIO-pattern probe
      (M5Unified.inl:1895-1898) still reports a board (`board_M5StampS3`, 136), so `board_detected`
      is true; and M5GFX would have no panel either.
-2. **Chip attribute `readDummyBits: "0"` in the reference `sim/diagram.json`** (not code).
+2. **No internal speaker (code behind `M5DD_SIM`, #39).** `m5dd::begin()` calls
+   `sim_disable_speaker()` (`cfg.internal_spk = false`) before `M5Dial.begin()`, so
+   `M5Dial.Speaker.tone()` is silent in the sim.
+   - Why: M5Unified plays the Dial's buzzer (GPIO3) through I2S DMA from its `spk_task`, which the
+     first tone starts. In Wokwi's ESP32-S3 the sketch then stops at the first click tone, with no
+     log line, reset or panic, until `wokwi-cli` times out. That was the #39 hang: every sketch
+     on `m5dd::begin()` went silent at its first knob turn or button press. DialProbe, which plays
+     no tone, passed.
+   - Evidence (local `wokwi-cli`, RtcTest scenario): with the speaker, silence right after the
+     button press (exit 42); with this, the scenario passes.
+   - No scenario checks sound, so nothing is lost. The device build keeps the tones.
+3. **Chip attribute `readDummyBits: "0"` in the reference `sim/diagram.json`** (not code).
    - M5GFX makes its single dummy read clock on the S3 by flipping `SPI_CK_IDLE_EDGE`. Wokwi
      produces no SCK edge for that.
    - The chip counted 32 clocks per `Bus_SPI` RDDID read, and 33 when the dummy clock was
      bit-banged.
    - The real panel needs 1, which is the chip default.
-3. **Separate build output.** The sim build goes to `.build/sim/<Name>/` (`M5DIAL_BUILD_DIR`), so
+4. **Separate build output.** The sim build goes to `.build/sim/<Name>/` (`M5DIAL_BUILD_DIR`), so
    it never overwrites the device build in `.build/<Name>/` that `upload.sh` flashes. `upload.sh`
    ignores an inherited `M5DIAL_BUILD_DIR`.
 

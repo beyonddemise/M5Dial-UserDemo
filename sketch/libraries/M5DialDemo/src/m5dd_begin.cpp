@@ -77,6 +77,20 @@ bool init_rfid() {
 void sim_route_panel_miso() {
     esp_rom_gpio_connect_in_signal(GPIO_NUM_5, FSPIQ_IN_IDX, false);
 }
+
+/**
+ * Leave the internal buzzer (GPIO3) unconfigured. Sim-only (-DM5DD_SIM, set by tools/sim.sh).
+ * M5Dial.Speaker.tone() then returns without sound; nothing else changes.
+ *
+ * why: M5Unified drives the Dial's buzzer through I2S DMA from its spk_task, started by the
+ * first tone. In Wokwi's ESP32-S3 that stops the sketch at the first click tone: no log, reset
+ * or panic, until wokwi-cli times out (#39). Evidence (local wokwi-cli, RtcTest scenario): with
+ * the speaker, silence right after the button press; with this, the scenario passes. No
+ * scenario checks sound; see docs/PORTING_NOTES.md.
+ */
+void sim_disable_speaker(m5::M5Unified::config_t& cfg) {
+    cfg.internal_spk = false;
+}
 #endif
 
 }  // namespace
@@ -93,7 +107,11 @@ void begin(const char* sketchName) {
     // MFRC522::PCD_Reset() busy-waits forever on CommandReg, so a missing or stuck reader
     // would hang every sketch at boot; RFID is initialised below only if the reader answers,
     // with a bounded reset (see docs/PORTING_NOTES.md "RFID presence probe").
-    M5Dial.begin(M5.config(), /*enableEncoder*/ false, /*enableRFID*/ false);
+    auto cfg = M5.config();
+#ifdef M5DD_SIM
+    sim_disable_speaker(cfg);
+#endif
+    M5Dial.begin(cfg, /*enableEncoder*/ false, /*enableRFID*/ false);
     dialEncoder.begin();
     // why: M5Unified's default serial log level comes from CORE_DEBUG_LEVEL (0 in this core's
     // default build), so INFO must be enabled explicitly

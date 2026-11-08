@@ -5,7 +5,7 @@
 # (or <Sketch>, e.g. UserDemo) - only on workflow_dispatch and on same-repo pull requests that
 # carry the `sim` label, because each scenario costs Wokwi CI minutes (free-plan monthly quota).
 # Adding the label starts a run; without it the job is skipped (a skipped job passes branch
-# protection). Opt-in since the first real run (PR #38): a full run is ~20 CI minutes.
+# protection). Opt-in since the first real run (PR #38): a full run is ~40 minutes of wall time.
 name: sim
 
 on:
@@ -46,7 +46,9 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'sim') &&
        (github.event.action != 'labeled' || github.event.label.name == 'sim'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # why 60: each scenario builds its sketch and runs it (~2.8 min wall time each); the first run
+    # where all 14 ran to the end (PR #50, after the #39 fix) hit the old 30-minute limit at 10
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         # why: no step uses git after checkout; keep the token out of .git/config
