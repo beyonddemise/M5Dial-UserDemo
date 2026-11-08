@@ -404,7 +404,7 @@ class ContributingDocTest(unittest.TestCase):
         with open(CONTRIBUTING) as f:
             text = f.read()
         for needle in ("git subtree split --prefix sketch/sim/chips/",
-                       "gh release create v0.1.0", "--prerelease", "chip.zip",
+                       "ver=0.1.0", "gh release create \"v$ver\"", "--prerelease", "chip.zip",
                        "Load custom board file", "wokwi/wokwi-boards",
                        "docs.google.com/document/d/1K59xkKL70uN_c_GNCs_Xk09F3tK12B-ygmFbw6i14t4",
                        "MIT", "#39"):

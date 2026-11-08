@@ -53,6 +53,7 @@ create repos in `beyonddemise`; wasi-sdk from `sketch/tools/setup.sh`):
 
 ```sh
 chip=gc9a01   # encoder | ft3267 | gc9a01 | pcf8563 | ws1850s
+ver=0.1.0     # the version in the chip's example/diagram.json
 git checkout main && git pull --ff-only
 
 # 1. history of the chip folder only, as its own branch (root = the chip folder)
@@ -68,11 +69,11 @@ make -C sketch/sim/chips/$chip clean
 make -C sketch/sim/chips/$chip WASI_SDK_PATH="$PWD/sketch/tools/wasi-sdk" zip
 unzip -l sketch/sim/chips/$chip/dist/chip.zip   # exactly chip.json + chip.wasm
 
-# 4. tag v0.1.0 on the new repo's main and attach chip.zip, marked as pre-release
-gh release create v0.1.0 sketch/sim/chips/$chip/dist/chip.zip \
+# 4. tag v$ver on the new repo's main and attach chip.zip, marked as pre-release
+gh release create "v$ver" sketch/sim/chips/$chip/dist/chip.zip \
   --repo beyonddemise/chip-$chip --target main --prerelease \
-  --title "v0.1.0" \
-  --notes "First pre-release. Host unit test passes; not yet seen passing a Wokwi simulation. See README.md."
+  --title "v$ver" \
+  --notes "Pre-release $ver. Host unit test passes; not yet seen passing a Wokwi simulation. See README.md."
 
 git branch -D split/chip-$chip
 ```
@@ -89,11 +90,12 @@ and start the simulation; the chip must load without errors (browser console).
    chip's `example/diagram.json` dependency, its `README.md` and its entry in
    `board-m5dial/board.json`. The tests take each chip's version from its example and fail
    if the README or board names another; the other chips keep theirs.
-2. After the merge to `main`, repeat step 1 (split) and push the split branch with
-   `git push https://github.com/beyonddemise/chip-$chip.git split/chip-$chip:main` (the split
-   is deterministic, so the push fast-forwards). Push **before** the release: `--target main`
-   tags the repo's current `main`, which must be the commit the payload was built from.
-3. Then steps 3 and 4 with the new tag (`gh release create v0.1.1 ...`).
+2. After the merge, run the whole block above again with `ver` set to the new version. It
+   starts with `git checkout main && git pull --ff-only`: the split is taken from `HEAD`, so
+   an old local `main` would publish the old chip. Step 2 then skips `gh repo create` (the
+   repo exists) and pushes the split branch; the split is deterministic, so the push
+   fast-forwards. Push **before** the release: `--target main` tags the repo's current
+   `main`, which must be the commit the payload was built from. Title and notes follow `ver`.
 
 ## Route 2: the M5Dial board (pull request to wokwi/wokwi-boards)
 
