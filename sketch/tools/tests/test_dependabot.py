@@ -17,13 +17,16 @@ UPSTREAM_WORKFLOWS = {"wecom-digest-forward.yml": "actions/github-script"}
 
 class DependabotTest(unittest.TestCase):
     def setUp(self):
+        """Loads .github/dependabot.yml."""
         with open(CONFIG) as f:
             self.config = yaml.safe_load(f)
 
     def test_config_is_version_2(self):
+        """The file uses Dependabot's config schema version 2."""
         self.assertEqual(2, self.config["version"])
 
     def test_github_actions_are_updated_from_the_repo_root(self):
+        """Exactly one github-actions entry, rooted at "/", on a valid schedule."""
         # why "/": Dependabot looks for workflows in <directory>/.github/workflows
         actions = [u for u in self.config["updates"] if u["package-ecosystem"] == "github-actions"]
         self.assertEqual(1, len(actions))
@@ -31,6 +34,7 @@ class DependabotTest(unittest.TestCase):
         self.assertIn(actions[0]["schedule"]["interval"], ("daily", "weekly", "monthly"))
 
     def test_upstream_workflow_actions_are_ignored(self):
+        """Every action used only by an upstream-synced workflow is on the ignore list."""
         # why: a bump of the synced file's action would diverge from upstream's next sync
         actions = next(u for u in self.config["updates"] if u["package-ecosystem"] == "github-actions")
         ignored = {i["dependency-name"] for i in actions.get("ignore", [])}
@@ -41,6 +45,7 @@ class DependabotTest(unittest.TestCase):
 
 class WorkflowPinTest(unittest.TestCase):
     def test_every_workflow_action_is_sha_pinned(self):
+        """Every `uses:` in our own workflows names a full 40-character commit SHA."""
         # why: Dependabot bumps a SHA pin and its version comment together; a tag pin (`@v4`)
         # would float, which deps.txt's "never float" rule forbids
         wf_dir = os.path.join(REPO, ".github", "workflows")
