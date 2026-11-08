@@ -62,8 +62,10 @@ chip=gc9a01 ver=0.1.0 bash -eu <<'EOS'
 repo=beyonddemise/chip-$chip
 
 # 0. Git 2.26 or later; why: older Git can keep a URL-specific credential username despite
-#    step 4's empty override, and the push would then prompt for a password
-printf '%s\n' 2.26 "$(git --version | cut -d' ' -f3)" | sort -V -C ||
+#    step 4's empty override, and the push would then prompt for a password; plain shell, as
+#    BusyBox sort has no -C
+IFS=. read -r gmaj gmin _ <<<"$(git --version | cut -d' ' -f3)"
+[ "$gmaj" -gt 2 ] || { [ "$gmaj" -eq 2 ] && [ "$gmin" -ge 26 ]; } ||
   { echo "the release block needs Git 2.26 or later: $(git --version)" >&2; exit 1; }
 
 # 1. history of the chip folder only (root = the chip folder), taken from the merged main;

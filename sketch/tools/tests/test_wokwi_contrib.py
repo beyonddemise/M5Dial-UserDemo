@@ -424,7 +424,10 @@ class ContributingDocTest(unittest.TestCase):
             text = f.read()
         # why a gate: Git before 2.26 can keep a URL-specific credential username despite the
         # empty override, and the push would prompt for a password
-        self.assertIn("printf '%s\\n' 2.26 \"$(git --version | cut -d' ' -f3)\" | sort -V -C", text)
+        # why plain shell, no `sort -V -C`: BusyBox sort lacks -C (and may lack -V)
+        self.assertIn('IFS=. read -r gmaj gmin _ <<<"$(git --version | cut -d\' \' -f3)"', text)
+        self.assertIn('[ "$gmaj" -gt 2 ] || { [ "$gmaj" -eq 2 ] && [ "$gmin" -ge 26 ]; } ||', text)
+        self.assertNotIn("sort -V", text)
         pushes = [line for line in text.splitlines()
                   if line.lstrip().startswith("git") and " push " in line]
         self.assertEqual(1, len(pushes))
