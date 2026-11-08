@@ -423,8 +423,10 @@ class ContributingDocTest(unittest.TestCase):
         with open(CONTRIBUTING) as f:
             pushes = [line for line in f if line.lstrip().startswith("git") and " push " in line]
         self.assertEqual(1, len(pushes))
-        self.assertIn("-c credential.helper= -c 'credential.helper=!gh auth git-credential' push",
-                      pushes[0])
+        # why credential.username=: gh returns nothing for a configured username that is not
+        # the gh account (checked with `gh auth git-credential get`), and git then prompts
+        self.assertIn("git -c credential.helper= -c 'credential.helper=!gh auth git-credential' "
+                      "-c credential.username= push", pushes[0])
 
 
 if __name__ == "__main__":

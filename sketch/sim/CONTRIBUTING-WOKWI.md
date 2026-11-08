@@ -84,8 +84,10 @@ fi
 
 # 4. publish the history as main (fast-forward only; the split is deterministic)
 #    why gh as the credential helper (for this push only): a plain https push stops with "could
-#    not read Username" unless git has credentials set up; gh is already logged in for step 3
-git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push \
+#    not read Username" unless git has credentials set up; gh is already logged in for step 3.
+#    why credential.username= too: gh answers nothing for a configured username that is not
+#    the gh account, and git would then prompt for a password
+git -c credential.helper= -c 'credential.helper=!gh auth git-credential' -c credential.username= push \
   "https://github.com/$repo.git" "$split:refs/heads/main"
 
 # 5. tag v$ver on the split commit in one API call: it fails if the tag already exists, so a
