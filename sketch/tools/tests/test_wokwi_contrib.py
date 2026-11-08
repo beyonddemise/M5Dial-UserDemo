@@ -211,6 +211,29 @@ class ChipZipTest(unittest.TestCase):
                     self.assertEqual(definition, json.loads(z.read("chip.json")))
                     self.assertEqual(b"\0asm", z.read("chip.wasm")[:4])
 
+    def test_zip_ignores_stale_dist(self):
+        # why: a dist/ left from another checkout can be newer than the sources, and make then
+        # skips the rebuild - wt-18 once packaged a chip.json with an old control id
+        chip = CHIPS[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, chip)
+            shutil.copytree(os.path.join(CHIPS_DIR, chip), src,
+                            ignore=shutil.ignore_patterns("dist"))
+            os.mkdir(os.path.join(src, "dist"))
+            future = 4102444800  # 2100-01-01, newer than any source
+            for name, data in (("chip.json", b'{"name": "stale"}'), ("chip.wasm", b"stale")):
+                path = os.path.join(src, "dist", name)
+                with open(path, "wb") as f:
+                    f.write(data)
+                os.utime(path, (future, future))
+            subprocess.run(["make", "-s", "-C", src, "WASI_SDK_PATH=" + os.path.abspath(WASI_SDK),
+                            "zip"], check=True, capture_output=True)
+            with open(os.path.join(src, chip + ".chip.json")) as f:
+                definition = json.load(f)
+            with zipfile.ZipFile(os.path.join(src, "dist", "chip.zip")) as z:
+                self.assertEqual(definition, json.loads(z.read("chip.json")))
+                self.assertEqual(b"\0asm", z.read("chip.wasm")[:4])
+
 
 class BoardTest(unittest.TestCase):
     """board-m5dial/board.json: the wokwi-boards format, wired like sim/diagram.json."""
