@@ -48,34 +48,42 @@ project then uses it by name and version:
 
 with a part `{ "type": "chip-gc9a01", "id": "lcd" }`. No review by Wokwi is needed.
 
-Steps per chip, from a clean checkout of this repo's `main` (`gh` logged in with rights to
-create repos in `beyonddemise`; wasi-sdk from `sketch/tools/setup.sh`):
+Steps per chip, from this repo's root (`gh` logged in with rights to create repos in
+`beyonddemise`; wasi-sdk from `sketch/tools/setup.sh`). Set `chip` and `ver`, then paste the
+block: it runs in its own `bash -eu`, so the first failing command stops it before anything
+is published.
 
 ```sh
-chip=gc9a01   # encoder | ft3267 | gc9a01 | pcf8563 | ws1850s
-ver=0.1.0     # the version in the chip's example/diagram.json
-git checkout main && git pull --ff-only
+chip=gc9a01 ver=0.1.0 bash -eu <<'EOS'
+# chip: encoder | ft3267 | gc9a01 | pcf8563 | ws1850s; ver: the version in its example/diagram.json
+repo=beyonddemise/chip-$chip
 
-# 1. history of the chip folder only, as its own branch (root = the chip folder)
-git subtree split --prefix sketch/sim/chips/$chip -b split/chip-$chip
+# 0. exactly the merged main: no local edits, no local-only commits
+git diff --quiet && git diff --cached --quiet
+git checkout main && git fetch origin
+git merge --ff-only origin/main
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 
-# 2. the public repo, with that history as its main branch
-gh repo create beyonddemise/chip-$chip --public \
+# 1. history of the chip folder only (root = the chip folder); prints the split commit
+split=$(git subtree split --prefix sketch/sim/chips/$chip)
+
+# 2. the public repo (first time only), with that history as its main branch
+gh repo view "$repo" >/dev/null 2>&1 || gh repo create "$repo" --public \
   --description "Wokwi custom chip: $chip" --homepage "https://wokwi.com"
-git push https://github.com/beyonddemise/chip-$chip.git split/chip-$chip:main
+git push "https://github.com/$repo.git" "$split:refs/heads/main"
 
 # 3. the release payload, built from the same commit (the folder is the split tree)
-make -C sketch/sim/chips/$chip clean
 make -C sketch/sim/chips/$chip WASI_SDK_PATH="$PWD/sketch/tools/wasi-sdk" zip
-unzip -l sketch/sim/chips/$chip/dist/chip.zip   # exactly chip.json + chip.wasm
+test "$(unzip -Z1 sketch/sim/chips/$chip/dist/chip.zip | sort | tr '\n' ' ')" = "chip.json chip.wasm "
 
-# 4. tag v$ver on the new repo's main and attach chip.zip, marked as pre-release
+# 4. a new tag v$ver on the split commit, with chip.zip, marked as pre-release
+#    (an existing tag would win over --target, so refuse it; `if`, as `set -e` ignores `!`)
+if gh api "repos/$repo/git/ref/tags/v$ver" >/dev/null 2>&1; then echo "v$ver exists" >&2; exit 1; fi
 gh release create "v$ver" sketch/sim/chips/$chip/dist/chip.zip \
-  --repo beyonddemise/chip-$chip --target main --prerelease \
+  --repo "$repo" --target "$split" --prerelease \
   --title "v$ver" \
   --notes "Pre-release $ver. Host unit test passes; not yet seen passing a Wokwi simulation. See README.md."
-
-git branch -D split/chip-$chip
+EOS
 ```
 
 Instead of step 3 you can download the `<chip>-chip` artefact of the `wokwi-chips` run on that
@@ -90,12 +98,10 @@ and start the simulation; the chip must load without errors (browser console).
    chip's `example/diagram.json` dependency, its `README.md` and its entry in
    `board-m5dial/board.json`. The tests take each chip's version from its example and fail
    if the README or board names another; the other chips keep theirs.
-2. After the merge, run the whole block above again with `ver` set to the new version. It
-   starts with `git checkout main && git pull --ff-only`: the split is taken from `HEAD`, so
-   an old local `main` would publish the old chip. Step 2 then skips `gh repo create` (the
-   repo exists) and pushes the split branch; the split is deterministic, so the push
-   fast-forwards. Push **before** the release: `--target main` tags the repo's current
-   `main`, which must be the commit the payload was built from. Title and notes follow `ver`.
+2. After the merge, run the block above again with `ver` set to the new version. Step 0
+   makes sure the split is taken from the merged `main` (the split uses `HEAD`), step 2
+   skips the existing repo and fast-forwards its `main` (the split is deterministic), and
+   step 4 tags exactly the pushed split commit, so tag and `chip.zip` always match.
 
 ## Route 2: the M5Dial board (pull request to wokwi/wokwi-boards)
 
