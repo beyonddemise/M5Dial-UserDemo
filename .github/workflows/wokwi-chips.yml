@@ -1,0 +1,103 @@
+# Builds every Wokwi custom chip (sketch/sim/chips/<chip>/) the way its own repo will once split
+# out (sketch/sim/CONTRIBUTING-WOKWI.md): host test, wasm build, `make zip`, and one artefact
+# `<chip>-chip` per chip. GitHub serves an artefact as a zip, so downloading `<chip>-chip`
+# gives `<chip>-chip.zip` holding exactly chip.json + chip.wasm - the same payload as the
+# `chip.zip` a Wokwi chip release carries. Read-only: no tags, no releases, no tokens.
+name: wokwi-chips
+
+on:
+  workflow_dispatch:
+  pull_request:
+    # why no ready_for_review: drafts already build on `opened`; it would rebuild the same SHA
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'sketch/sim/chips/**'
+      - '.github/workflows/wokwi-chips.yml'
+  # why push on main only: every port/** branch is built through its PR
+  push:
+    branches: [main]
+    paths:
+      - 'sketch/sim/chips/**'
+      - '.github/workflows/wokwi-chips.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wokwi-chips-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  chip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      # why: one broken chip must not hide whether the others still build
+      fail-fast: false
+      matrix:
+        # why a list, not a glob: one job and one artefact per chip; tools/tests/
+        # test_wokwi_contrib.py fails if a chip folder is missing here
+        chip: [encoder, ft3267, gc9a01, pcf8563, ws1850s]
+    defaults:
+      run:
+        working-directory: sketch/sim/chips/${{ matrix.chip }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        # why: no step uses git after checkout; keep the token out of .git/config
+        with:
+          persist-credentials: false
+
+      - name: Read pinned wasi-sdk
+        id: deps
+        working-directory: .
+        # why: sketch/tools/deps.txt is the single source of truth for versions and hashes
+        run: |
+          . sketch/tools/deps.txt
+          echo "version=$WASI_SDK_VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$WASI_SHA256_x86_64_linux" >> "$GITHUB_OUTPUT"
+
+      - name: Cache wasi-sdk
+        id: cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: sketch/tools/wasi-sdk
+          key: wasi-sdk-${{ runner.os }}-${{ runner.arch }}-${{ steps.deps.outputs.version }}-${{ steps.deps.outputs.sha256 }}
+
+      - name: Install wasi-sdk
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: .
+        # why not tools/setup.sh: it also installs arduino-cli, the M5Stack core and libraries,
+        # none of which a chip needs; this is its step 4 (same URL, same pinned sha256)
+        env:
+          WASI_VERSION: ${{ steps.deps.outputs.version }}
+          WASI_SHA256: ${{ steps.deps.outputs.sha256 }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/wasi.tgz" \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$WASI_VERSION/wasi-sdk-$WASI_VERSION.0-x86_64-linux.tar.gz"
+          echo "$WASI_SHA256  $RUNNER_TEMP/wasi.tgz" | sha256sum -c -
+          mkdir -p sketch/tools/wasi-sdk
+          tar -xzf "$RUNNER_TEMP/wasi.tgz" -C sketch/tools/wasi-sdk --strip-components=1
+
+      - name: Host test
+        run: make test
+
+      - name: Build chip.zip
+        run: make WASI_SDK_PATH="$GITHUB_WORKSPACE/sketch/tools/wasi-sdk" zip
+
+      - name: Check chip.zip
+        # why: Wokwi loads a chip from a zip holding exactly one chip.json and one chip.wasm
+        run: |
+          contents="$(unzip -Z1 dist/chip.zip | sort | tr '\n' ' ')"
+          echo "chip.zip: $contents"
+          [ "$contents" = "chip.json chip.wasm " ]
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ matrix.chip }}-chip
+          # why the two files, not dist/chip.zip: the artefact is zipped on download anyway, and
+          # a zip inside a zip would not be the release payload's shape
+          path: |
+            sketch/sim/chips/${{ matrix.chip }}/dist/chip.json
+            sketch/sim/chips/${{ matrix.chip }}/dist/chip.wasm
+          if-no-files-found: error

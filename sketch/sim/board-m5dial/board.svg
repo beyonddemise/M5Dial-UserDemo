@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- M5Stack Dial board drawing for Wokwi (draft). Original, neutral artwork; MIT, see ../chips/*/LICENSE.
+     1 user unit = 1 mm. The display (board.json "displays") is drawn by Wokwi over the window. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="45mm" height="52mm" viewBox="0 0 45 52">
+  <!-- body -->
+  <rect x="0.5" y="0.5" width="44" height="51" rx="5" fill="#3a3d42" stroke="#202225" stroke-width="0.4"/>
+  <!-- rotary ring with grip marks -->
+  <circle cx="22.5" cy="22.5" r="21.2" fill="#8d939b" stroke="#5d636b" stroke-width="0.4"/>
+  <circle cx="22.5" cy="22.5" r="21.2" fill="none" stroke="#6f757d" stroke-width="0.6" stroke-dasharray="0.6 1.2"/>
+  <!-- display bezel and window (display area x/y 6.3..38.7) -->
+  <circle cx="22.5" cy="22.5" r="17.4" fill="#111"/>
+  <circle cx="22.5" cy="22.5" r="16.2" fill="#000"/>
+  <!-- name -->
+  <text x="22.5" y="45.6" font-family="sans-serif" font-size="1.8" font-weight="bold" fill="#e8e8e8" text-anchor="middle">M5Dial</text>
+  <!-- connector pads -->
+  <g fill="none" stroke="#9a9a9a" stroke-width="0.25">
+    <rect x="4.85" y="46.6" width="10.2" height="4.4" rx="0.6"/>
+    <rect x="17.55" y="46.6" width="10.2" height="4.4" rx="0.6"/>
+  </g>
+  <g fill="#c9a227" stroke="#8a6d12" stroke-width="0.2">
+    <circle cx="6.15" cy="49.8" r="0.75"/>
+    <circle cx="8.69" cy="49.8" r="0.75"/>
+    <circle cx="11.23" cy="49.8" r="0.75"/>
+    <circle cx="13.77" cy="49.8" r="0.75"/>
+    <circle cx="18.85" cy="49.8" r="0.75"/>
+    <circle cx="21.39" cy="49.8" r="0.75"/>
+    <circle cx="23.93" cy="49.8" r="0.75"/>
+    <circle cx="26.47" cy="49.8" r="0.75"/>
+    <circle cx="31.55" cy="49.8" r="0.75"/>
+    <circle cx="34.09" cy="49.8" r="0.75"/>
+    <circle cx="36.63" cy="49.8" r="0.75"/>
+    <circle cx="39.17" cy="49.8" r="0.75"/>
+  </g>
+  <g font-family="sans-serif" font-size="0.9" fill="#e8e8e8" text-anchor="middle">
+    <text x="6.15" y="47.9">G15</text>
+    <text x="8.69" y="47.9">G13</text>
+    <text x="11.23" y="47.9">5V</text>
+    <text x="13.77" y="47.9">GND</text>
+    <text x="18.85" y="47.9">G1</text>
+    <text x="21.39" y="47.9">G2</text>
+    <text x="23.93" y="47.9">5V</text>
+    <text x="26.47" y="47.9">GND</text>
+    <text x="31.55" y="47.9">G42</text>
+    <text x="34.09" y="47.9">G3</text>
+    <text x="36.63" y="47.9">3V3</text>
+    <text x="39.17" y="47.9">GND</text>
+    <text x="9.95" y="51.6" font-size="0.8">PORT A</text>
+    <text x="22.65" y="51.6" font-size="0.8">PORT B</text>
+  </g>
+</svg>

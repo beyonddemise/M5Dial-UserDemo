@@ -68,6 +68,32 @@ Scenario example: set `x` and `y`, then `touched` to 1; set `touched` to 0 to li
 - The default `CIPHER` value for the FT3267 is taken from community reports; set `chipId` if your driver checks it.
 - Coordinates are passed through unchanged; panel resolution/rotation is the driver's business.
 
+## Use it in Wokwi
+
+Each release of this chip (a tag `vX.Y.Z` with the asset `chip.zip`, holding exactly
+`chip.json` and `chip.wasm`) can be loaded by any Wokwi project. Add the dependency and a part to
+the project's `diagram.json`:
+
+```json
+"dependencies": {
+  "chip-ft3267": "github:beyonddemise/chip-ft3267@0.1.0"
+}
+```
+
+```json
+{ "type": "chip-ft3267", "id": "touch", "top": 0, "left": 200, "attrs": {} }
+```
+
+[`example/diagram.json`](example/diagram.json) is a complete minimal project: a stock
+ESP32-S3-DevKitC-1 and this chip, nothing else.
+The example wires the panel to the ESP32-S3's default I2C pins (SDA 8, SCL 9), `INT` to
+GPIO10 (enable the MCU's pull-up) and ties `RST` high.
+
+**Status:** `0.1.0` is a pre-release. The host unit test (`make test`) passes. The chip is part of the
+wokwi-cli automation scenarios of the [M5Dial demo](https://github.com/beyonddemise/M5Dial-UserDemo),
+but it has not yet been seen passing a Wokwi simulation: those scenarios are held up by
+[issue #39](https://github.com/beyonddemise/M5Dial-UserDemo/issues/39). Reports welcome.
+
 ## Build
 
 Needs [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) (tested with 34).
@@ -78,15 +104,14 @@ make WASI_SDK_PATH=/path/to/wasi-sdk zip    # dist/chip.zip (release payload)
 make test                                   # host unit test (native cc)
 ```
 
-Use it in `wokwi.toml`:
+To try a local build, point `wokwi.toml` at it and add a part of type `chip-ft3267` to
+`diagram.json`:
 
 ```toml
 [[chip]]
 name = 'ft3267'
 binary = 'path/to/dist/chip.wasm'
 ```
-
-Then add a part of type `chip-ft3267` in `diagram.json`.
 
 `wokwi-api.h` is the unmodified Wokwi Chips API header (from wokwi.com/api/chips/wokwi-api.h).
 

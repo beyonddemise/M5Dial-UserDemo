@@ -72,6 +72,32 @@ Removing the card (or changing its UID) resets it to IDLE, as when a real card l
 - RF-level timing (frame delay times) is not modelled: answers are available immediately after `StartSend`.
 - Analog/RF configuration registers (gain, modulation, thresholds) and the self-test are stored only.
 
+## Use it in Wokwi
+
+Each release of this chip (a tag `vX.Y.Z` with the asset `chip.zip`, holding exactly
+`chip.json` and `chip.wasm`) can be loaded by any Wokwi project. Add the dependency and a part to
+the project's `diagram.json`:
+
+```json
+"dependencies": {
+  "chip-ws1850s": "github:beyonddemise/chip-ws1850s@0.1.0"
+}
+```
+
+```json
+{ "type": "chip-ws1850s", "id": "rfid", "top": 0, "left": 200, "attrs": {} }
+```
+
+[`example/diagram.json`](example/diagram.json) is a complete minimal project: a stock
+ESP32-S3-DevKitC-1 and this chip, nothing else.
+The example wires the reader to the ESP32-S3's default I2C pins (SDA 8, SCL 9), `IRQ` to
+GPIO10 and ties `RST` high.
+
+**Status:** `0.1.0` is a pre-release. The host unit test (`make test`) passes. The chip is part of the
+wokwi-cli automation scenarios of the [M5Dial demo](https://github.com/beyonddemise/M5Dial-UserDemo),
+but it has not yet been seen passing a Wokwi simulation: those scenarios are held up by
+[issue #39](https://github.com/beyonddemise/M5Dial-UserDemo/issues/39). Reports welcome.
+
 ## Build
 
 Needs [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) (tested with 34).
@@ -82,15 +108,14 @@ make WASI_SDK_PATH=/path/to/wasi-sdk zip    # dist/chip.zip (release payload)
 make test                                   # host unit test (native cc)
 ```
 
-Use it in `wokwi.toml`:
+To try a local build, point `wokwi.toml` at it and add a part of type `chip-ws1850s` to
+`diagram.json`:
 
 ```toml
 [[chip]]
 name = 'ws1850s'
 binary = 'path/to/dist/chip.wasm'
 ```
-
-Then add a part of type `chip-ws1850s` in `diagram.json`.
 
 `wokwi-api.h` is the unmodified Wokwi Chips API header (from wokwi.com/api/chips/wokwi-api.h).
 
