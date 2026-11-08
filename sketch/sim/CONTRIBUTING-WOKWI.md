@@ -50,43 +50,49 @@ with a part `{ "type": "chip-gc9a01", "id": "lcd" }`. No review by Wokwi is need
 
 Steps per chip, from this repo's root (`gh` logged in with rights to create repos in
 `beyonddemise`; wasi-sdk from `sketch/tools/setup.sh`). Set `chip` and `ver`, then paste the
-block: it runs in its own `bash -eu`, so the first failing command stops it before anything
-is published.
+block. It runs in its own `bash -eu`, and every check (split, build, zip content, repo
+visibility) runs before the first public change. A later remote step (push, tag, release)
+can still fail half-way; rerun the block once the cause is fixed. The push is fast-forward
+only and an existing tag stops it.
 
 ```sh
 chip=gc9a01 ver=0.1.0 bash -eu <<'EOS'
 # chip: encoder | ft3267 | gc9a01 | pcf8563 | ws1850s; ver: the version in its example/diagram.json
 repo=beyonddemise/chip-$chip
 
-# 0. exactly the merged main: no local edits, no local-only commits
-git diff --quiet && git diff --cached --quiet
-git checkout main && git fetch origin
-git merge --ff-only origin/main
-test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+# 1. history of the chip folder only (root = the chip folder), taken from the merged main;
+#    why no checkout: main may be checked out in another worktree, and the working tree is
+#    never used (step 2 builds from the split commit itself)
+git fetch origin
+split=$(git subtree split --prefix sketch/sim/chips/$chip origin/main)
 
-# 1. history of the chip folder only (root = the chip folder); prints the split commit
-split=$(git subtree split --prefix sketch/sim/chips/$chip)
+# 2. preflight, nothing public yet: build chip.zip from an export of exactly that commit
+tmp=$(mktemp -d)
+git archive "$split" | tar -x -C "$tmp"
+make -C "$tmp" WASI_SDK_PATH="$PWD/sketch/tools/wasi-sdk" zip
+test "$(unzip -Z1 "$tmp/dist/chip.zip" | sort | tr '\n' ' ')" = "chip.json chip.wasm "
 
-# 2. the public repo (first time only), with that history as its main branch
-gh repo view "$repo" >/dev/null 2>&1 || gh repo create "$repo" --public \
-  --description "Wokwi custom chip: $chip" --homepage "https://wokwi.com"
+# 3. the repo: created if missing; an existing one must be public (Wokwi cannot load a private one)
+vis=$(gh repo view "$repo" --json visibility --jq .visibility 2>/dev/null || echo MISSING)
+if [ "$vis" = MISSING ]; then
+  # why no special case for a failed lookup: create then fails on an existing repo and stops
+  gh repo create "$repo" --public --description "Wokwi custom chip: $chip" --homepage "https://wokwi.com"
+elif [ "$vis" != PUBLIC ]; then
+  echo "$repo is $vis, not PUBLIC" >&2; exit 1
+fi
+
+# 4. publish the history as main (fast-forward only; the split is deterministic)
 git push "https://github.com/$repo.git" "$split:refs/heads/main"
 
-# 3. the release payload, built from the same commit (the folder is the split tree)
-make -C sketch/sim/chips/$chip WASI_SDK_PATH="$PWD/sketch/tools/wasi-sdk" zip
-test "$(unzip -Z1 sketch/sim/chips/$chip/dist/chip.zip | sort | tr '\n' ' ')" = "chip.json chip.wasm "
-
-# 4. a new tag v$ver on the split commit, with chip.zip, marked as pre-release
-#    (an existing tag would win over --target, so refuse it; `if`, as `set -e` ignores `!`)
-if gh api "repos/$repo/git/ref/tags/v$ver" >/dev/null 2>&1; then echo "v$ver exists" >&2; exit 1; fi
-gh release create "v$ver" sketch/sim/chips/$chip/dist/chip.zip \
-  --repo "$repo" --target "$split" --prerelease \
-  --title "v$ver" \
-  --notes "Pre-release $ver. Host unit test passes; not yet seen passing a Wokwi simulation. See README.md."
+# 5. tag v$ver on the split commit in one API call: it fails if the tag already exists, so a
+#    lookup error can never be mistaken for "no tag"; the release then uses only that tag
+gh api "repos/$repo/git/refs" -f ref="refs/tags/v$ver" -f sha="$split" >/dev/null
+gh release create "v$ver" "$tmp/dist/chip.zip" --repo "$repo" --verify-tag --prerelease \
+  --title "v$ver" --notes "Pre-release $ver. Status, registers and known gaps: README.md."
 EOS
 ```
 
-Instead of step 3 you can download the `<chip>-chip` artefact of the `wokwi-chips` run on that
+Instead of building in step 2 you can download the `<chip>-chip` artefact of the `wokwi-chips` run on that
 `main` commit and zip its two files as `chip.zip`; the content is the same.
 
 Check it: open a new ESP32-S3 project on wokwi.com, paste the chip's `example/diagram.json`
@@ -98,10 +104,10 @@ and start the simulation; the chip must load without errors (browser console).
    chip's `example/diagram.json` dependency, its `README.md` and its entry in
    `board-m5dial/board.json`. The tests take each chip's version from its example and fail
    if the README or board names another; the other chips keep theirs.
-2. After the merge, run the block above again with `ver` set to the new version. Step 0
-   makes sure the split is taken from the merged `main` (the split uses `HEAD`), step 2
-   skips the existing repo and fast-forwards its `main` (the split is deterministic), and
-   step 4 tags exactly the pushed split commit, so tag and `chip.zip` always match.
+2. After the merge, run the block above again with `ver` set to the new version. Step 1 splits
+   the merged `main` (never the working tree), step 3 keeps the existing repo, step 4
+   fast-forwards its `main`, and step 5 tags exactly the pushed split commit, so tag and
+   `chip.zip` always match.
 
 ## Route 2: the M5Dial board (pull request to wokwi/wokwi-boards)
 
