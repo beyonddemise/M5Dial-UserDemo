@@ -31,9 +31,8 @@ owner's call and happens only on the owner's explicit go (issue #20, step 4).
 
 ## Status, honestly
 
-The chips pass their host unit tests and build to wasm. None of them has yet been seen
-passing a Wokwi simulation: this repo's scenarios are held up by #39 (the simulation hangs).
-The board definition has never been loaded in Wokwi. Release the chips as **pre-releases**
+The chips pass their host unit tests, build to wasm, and run in this repo's Wokwi scenarios,
+which pass since the #39 fix (PR #50). The board definition has never been loaded in Wokwi. Release the chips as **pre-releases**
 (`v0.1.0`) and say so in the release notes.
 
 ## Route 1: a chip as a community chip (own repo + release)
@@ -121,8 +120,8 @@ What it needs:
 
 1. **All five chips released** (route 1): `board.json` refers to them as
    `github:beyonddemise/chip-<part>@0.1.0`.
-2. **A passing Wokwi scenario first.** Offer the board only after the M5Dial demo's
-   scenarios pass in Wokwi (#39 closed) and the board itself ran there. Until then it stays
+2. **The board itself ran in Wokwi.** The demo's scenarios pass (#39, PR #50); offer the
+   board only after it has also loaded and run there (item 3). Until then it stays
    a draft in [`board-m5dial/`](board-m5dial).
 3. **A local test with Wokwi's own loader:** in a new wokwi.com project, click into the code
    editor, press F1, choose "Load custom board file..." and select the `board-m5dial` folder;

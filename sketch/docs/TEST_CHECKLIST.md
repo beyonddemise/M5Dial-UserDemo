@@ -202,17 +202,17 @@ Destructive: it overwrites the whole 8 MB flash.
 
 ## Simulator items (first passing Wokwi run)
 
-Not device checks, but open until the scenarios pass on Wokwi (the hang is #39).
+Not device checks. Since the #39 fix (PR #50) the scenarios pass on Wokwi; what is left is below.
 
 - [ ] **LcdTest frame hash.** **Do:** `tools/sim.sh examples/LcdTest sim/scenarios/LcdTest/lcd_test.test.yaml`.
   **Expect:** record the `gc9a01: frame fnv=<hash>` of the touch step and add the
   `expect-chip-output` check the scenario comment describes.
-- [ ] **Factory `io_leds`.** **Do:** `tools/sim.sh UserDemo sim/scenarios/UserDemo/io_leds.test.yaml`.
+- [x] **Factory `io_leds`.** **Do:** `tools/sim.sh UserDemo sim/scenarios/UserDemo/io_leds.test.yaml`.
   **Expect:** PASS; this confirms Wokwi's ADC reads < 100 mV at pot position 0 (level 6).
-- [ ] **NimBLE in Wokwi.** **Do:** `tools/sim.sh UserDemo sim/scenarios/UserDemo/launcher.test.yaml`.
+- [x] **NimBLE in Wokwi.** **Do:** `tools/sim.sh UserDemo sim/scenarios/UserDemo/launcher_apps.test.yaml`.
   **Expect:** the BLE leg reaches `app: close BLE_Server`. If NimBLE init hangs or crashes,
   BleServer and the launcher BLE leg need an `M5DD_SIM` guard (owner decision).
-- [ ] **Every other scenario** (`sim/scenarios/*/*.test.yaml`) passes at least once; settle delays
+- [x] **Every other scenario** (`sim/scenarios/*/*.test.yaml`) passes at least once; settle delays
   tuned where needed.
 
 ## CI (first real run)

@@ -543,8 +543,8 @@ Class `MoreMenu`, launcher slot 7, Task 14.
 - **Button edge:** the click that opened the menu cannot also choose Quit.
 - **Scenarios:** `sim/scenarios/UserDemo/more_menu_quit.test.yaml` (Quit → `app: close MoreMenu`
   → `launcher: ready`) and `power_off.test.yaml` (`power: off`; the sim ending there is accepted).
-  Each is its own Wokwi session, because a power-off ends the boot. Not yet seen passing on
-  Wokwi (the scenario hang is #39); the 300/400/500 ms settle delays are estimates.
+  Each is its own Wokwi session, because a power-off ends the boot. Both pass on Wokwi (PR #50,
+  run 42501330101) with the 300/400/500 ms settle delays as written.
 
 ### Memory soak (`examples/MemSoak`)
 
@@ -659,8 +659,7 @@ button that toggles the arc colour. Logs `lvgl: ready`, `lvgl: value=<n>` on eve
   The arc starts focused in edit mode; a knob press leaves edit mode, so the knob can then focus
   the button.
 - **Not verified yet:** `sim/scenarios/LvglDemo/knob.test.yaml` (boot, `lvgl: ready`, CW x5 →
-  `value=5`, CCW → `value=4`) has not yet passed on Wokwi (#39), and the sketch has not run on
-  the device. Colours, RGB565 byte order and the touch mapping are unchecked on a real panel.
+  `value=5`, CCW → `value=4`) passes on Wokwi (PR #50); the sketch has not run on the device. Colours, RGB565 byte order and the touch mapping are unchecked on a real panel.
 
 ### DialProbe
 
@@ -946,10 +945,11 @@ Everything below is listed with its exact check in [TEST_CHECKLIST.md](TEST_CHEC
   encoder direction on the real knob, MemSoak min heap, BLE with `ble_check.py`, More → Power Off
   on USB power, factory RTC wake-up, LvglDemo colours/byte order/touch, `Ex_I2C` scan time on a
   bare Port A.
-- **Scenarios not yet seen passing** (first real run PR #38; the hang is #39): every scenario written since Task 7, including
-  `more_menu_quit`, `power_off`, the factory `enter`/`skip_io`/`io_leds`, LvglDemo `knob`. Their
-  settle delays are estimates; they also assume `wait-serial` consumes the stream in order and
-  that `steps: 0` stops a running encoder burst.
+- **Scenarios** pass on Wokwi since the #39 fix (PR #50: CI run 42501330101 passed 13 of 14; the
+  14th, the one-session launcher run, outgrew the free plan's 5-minute session and was split into
+  `launcher`, `launcher_apps` and `launcher_touch`, each passing on its own). The settle delays
+  work as written; they still rely on `wait-serial` consuming the stream in order and on
+  `steps: 0` stopping a running encoder burst.
 - **Sim assumptions:** whether NimBLE init returns in Wokwi; `io_leds` assumes Wokwi's ADC reads
   < 100 mV at pot position 0 and ≥ 2600 mV at position 1; the RFID chip resets a card to IDLE when
   `cardPresent` goes to 0. (Settled since: the Wokwi ESP32-S3 boots the 8 MB merged image only

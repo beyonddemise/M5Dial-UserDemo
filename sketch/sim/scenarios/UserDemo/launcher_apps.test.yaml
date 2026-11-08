@@ -1,0 +1,69 @@
+# UserDemo on the virtual M5Dial: launcher, Brightness, WifiScan and BleServer.
+# Run: tools/sim.sh UserDemo sim/scenarios/UserDemo/launcher_apps.test.yaml
+#
+# Parts and launcher slots: see launcher.test.yaml.
+#
+# why three files (launcher, launcher_apps, launcher_touch): one session for all apps needs
+# more than 20 s of simulated time and, at ~4 s of wall time per simulated second, more than
+# the free Wokwi plan's 5-minute session limit (PR #50, run 42501330101). Each file boots
+# again and stays well under both.
+name: 'UserDemo: launcher apps'
+version: 1
+steps:
+  # --- plain boot (no button hold): straight to the launcher
+  # why no hold any more: holding the button > 1 s at boot now enters the factory test, which
+  # ends with a power-off (covered by enter/skip_io/io_leds.test.yaml in their own sessions).
+  # wait-serial cannot assert that no `factory:` line came; the device smoke covers that:
+  #   device_test.py UserDemo --expect 'boot: UserDemo' 'launcher: ready' --forbid 'factory:'
+  - wait-serial: 'boot: UserDemo'
+  - wait-serial: 'launcher: ready'
+
+  # why edgeIntervalUs 40 ms: a slow, unambiguous turn, one launcher step per detent
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  # --- Set_Brightness: three detents from slot 0 to slot 3, open, current value logged, quit unchanged
+  - set-control: { part-id: enc, control: steps, value: 3 }
+  - wait-serial: 'launcher: select 3 Brightness'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open Set_Brightness'
+  - wait-serial: 'brightness: '
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close Set_Brightness'
+  - wait-serial: 'launcher: ready'
+
+  # --- WiFi_Scan: one detent to slot 4, open, one scan result, quit (Wi-Fi off, heap logged)
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'launcher: select 4 WifiScan'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open WiFi_Scan'
+  - wait-serial: 'wifi: ap_count='
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'wifi: heap='
+  - wait-serial: 'app: close WiFi_Scan'
+  - wait-serial: 'launcher: ready'
+
+  # --- BLE_Server: one detent to slot 5, open, quit. Open/close only: Wokwi has no BLE, so
+  # nothing BLE-side (advertising, connect, notify) is checked here (docs/PORTING_NOTES.md)
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'launcher: select 5 BleServer'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open BLE_Server'
+  - delay: 500ms
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close BLE_Server'
+  - wait-serial: 'launcher: ready'
+
