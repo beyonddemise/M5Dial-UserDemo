@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "author": "Stephan Wissel",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-s3-devkitc-1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "chip-gc9a01",
+      "id": "lcd",
+      "top": -20,
+      "left": 200,
+      "attrs": {}
+    }
+  ],
+  "connections": [
+    [
+      "esp:TX",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "lcd:SDA",
+      "esp:11",
+      "blue",
+      []
+    ],
+    [
+      "lcd:SCL",
+      "esp:12",
+      "yellow",
+      []
+    ],
+    [
+      "lcd:CS",
+      "esp:10",
+      "orange",
+      []
+    ],
+    [
+      "lcd:DC",
+      "esp:9",
+      "green",
+      []
+    ],
+    [
+      "lcd:RST",
+      "esp:8",
+      "purple",
+      []
+    ],
+    [
+      "lcd:BL",
+      "esp:7",
+      "white",
+      []
+    ],
+    [
+      "lcd:VCC",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "lcd:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ]
+  ],
+  "dependencies": {
+    "chip-gc9a01": "github:beyonddemise/chip-gc9a01@0.1.0"
+  }
+}

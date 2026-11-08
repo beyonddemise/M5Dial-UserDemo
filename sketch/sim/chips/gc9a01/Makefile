@@ -26,8 +26,12 @@ $(TARGET): $(SOURCES) wokwi-api.h | dist
 dist/chip.json: gc9a01.chip.json | dist
 	cp $< $@
 
-zip: all
-	cd dist && rm -f chip.zip && zip -9 -q chip.zip chip.json chip.wasm
+# why clean first: a dist/ left from another checkout can be newer than the sources, and make
+# would then package stale output; the release payload is always built from scratch
+zip:
+	$(MAKE) clean
+	$(MAKE) all
+	cd dist && zip -9 -q chip.zip chip.json chip.wasm
 
 test: | dist
 	@# why: wokwi rejects unknown keys at simulation start (chip.schema.json, additionalProperties: false)

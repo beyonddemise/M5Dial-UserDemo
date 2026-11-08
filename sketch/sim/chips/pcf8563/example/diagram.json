@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "author": "Stephan Wissel",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-s3-devkitc-1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "chip-pcf8563",
+      "id": "rtc",
+      "top": -20,
+      "left": 200,
+      "attrs": {}
+    }
+  ],
+  "connections": [
+    [
+      "esp:TX",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "rtc:SDA",
+      "esp:8",
+      "blue",
+      []
+    ],
+    [
+      "rtc:SCL",
+      "esp:9",
+      "yellow",
+      []
+    ],
+    [
+      "rtc:INT",
+      "esp:10",
+      "green",
+      []
+    ],
+    [
+      "rtc:VDD",
+      "esp:3V3.1",
+      "red",
+      []
+    ],
+    [
+      "rtc:VSS",
+      "esp:GND.1",
+      "black",
+      []
+    ]
+  ],
+  "dependencies": {
+    "chip-pcf8563": "github:beyonddemise/chip-pcf8563@0.1.0"
+  }
+}
