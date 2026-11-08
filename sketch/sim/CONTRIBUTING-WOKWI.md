@@ -61,6 +61,11 @@ chip=gc9a01 ver=0.1.0 bash -eu <<'EOS'
 # chip: encoder | ft3267 | gc9a01 | pcf8563 | ws1850s; ver: the version in its example/diagram.json
 repo=beyonddemise/chip-$chip
 
+# 0. Git 2.26 or later; why: older Git can keep a URL-specific credential username despite
+#    step 4's empty override, and the push would then prompt for a password
+printf '%s\n' 2.26 "$(git --version | cut -d' ' -f3)" | sort -V -C ||
+  { echo "the release block needs Git 2.26 or later: $(git --version)" >&2; exit 1; }
+
 # 1. history of the chip folder only (root = the chip folder), taken from the merged main;
 #    why no checkout: main may be checked out in another worktree, and the working tree is
 #    never used (step 2 builds from the split commit itself)

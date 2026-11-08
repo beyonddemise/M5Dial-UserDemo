@@ -421,7 +421,12 @@ class ContributingDocTest(unittest.TestCase):
         "could not read Username"; gh is the one tool the block already needs logged in.
         """
         with open(CONTRIBUTING) as f:
-            pushes = [line for line in f if line.lstrip().startswith("git") and " push " in line]
+            text = f.read()
+        # why a gate: Git before 2.26 can keep a URL-specific credential username despite the
+        # empty override, and the push would prompt for a password
+        self.assertIn("printf '%s\\n' 2.26 \"$(git --version | cut -d' ' -f3)\" | sort -V -C", text)
+        pushes = [line for line in text.splitlines()
+                  if line.lstrip().startswith("git") and " push " in line]
         self.assertEqual(1, len(pushes))
         # why credential.username=: gh returns nothing for a configured username that is not
         # the gh account (checked with `gh auth git-credential get`), and git then prompts
