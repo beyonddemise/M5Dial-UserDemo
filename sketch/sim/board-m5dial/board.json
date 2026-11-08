@@ -1,0 +1,87 @@
+{
+  // Draft wokwi-boards definition of the M5Stack Dial (see README.md next to this file).
+  // Wiring = sketch/sim/diagram.json, the reference assembly every scenario of this repo runs.
+  "name": "M5Stack Dial",
+  "version": 1,
+  "description": "M5Stack Dial: StampS3 (ESP32-S3, 8 MB flash) with a 1.28in 240x240 round GC9A01 display, FT3267 touch, PCF8563 RTC, WS1850S RFID reader, rotary encoder, button and buzzer",
+  "author": "Stephan Wissel",
+  "mcu": "esp32-s3",
+  "mcuAttrs": {
+    "flashSize": "8"
+  },
+  // why stamp_s3: the Dial's module is a StampS3; the Espressif core's own board entry for it
+  "fqbn": "esp32:esp32:m5stack_stamp_s3",
+
+  "width": 45,
+  "height": 52,
+
+  // Custom chips, each loaded from its own repo's GitHub release (asset chip.zip)
+  "chips": [
+    // why readDummyBits 0: Wokwi's ESP32-S3 sends no clock for M5GFX's 1-bit read dummy
+    { "id": "lcd", "type": "github:beyonddemise/chip-gc9a01@0.1.0", "attrs": { "readDummyBits": "0" } },
+    { "id": "touch", "type": "github:beyonddemise/chip-ft3267@0.1.0" },
+    { "id": "rtc", "type": "github:beyonddemise/chip-pcf8563@0.1.0" },
+    { "id": "rfid", "type": "github:beyonddemise/chip-ws1850s@0.1.0" },
+    { "id": "enc", "type": "github:beyonddemise/chip-encoder@0.1.0" }
+  ],
+
+  "pins": {
+    // Port A (Grove, I2C): yellow SCL, white SDA, red 5V, black GND
+    "G15": { "x": 6.15, "y": 49.8, "target": "GPIO15", "tooltip": "Port A SCL" },
+    "G13": { "x": 8.69, "y": 49.8, "target": "GPIO13", "tooltip": "Port A SDA" },
+    "5V.1": { "x": 11.23, "y": 49.8, "target": "power(5)", "tooltip": "Port A 5V" },
+    "GND.1": { "x": 13.77, "y": 49.8, "target": "GND", "tooltip": "Port A GND" },
+
+    // Port B (Grove, GPIO)
+    "G1": { "x": 18.85, "y": 49.8, "target": "GPIO1", "tooltip": "Port B" },
+    "G2": { "x": 21.39, "y": 49.8, "target": "GPIO2", "tooltip": "Port B" },
+    "5V.2": { "x": 23.93, "y": 49.8, "target": "power(5)", "tooltip": "Port B 5V" },
+    "GND.2": { "x": 26.47, "y": 49.8, "target": "GND", "tooltip": "Port B GND" },
+
+    // why exposed, not internal: a board can only hold chips, so wire a wokwi-pushbutton
+    // (to GND, 10k pull-up to 3V3) and a wokwi-buzzer here, as sim/diagram.json does
+    "G42": { "x": 31.55, "y": 49.8, "target": "GPIO42", "tooltip": "BtnA (active low)" },
+    "G3": { "x": 34.09, "y": 49.8, "target": "GPIO3", "tooltip": "Buzzer" },
+    "3V3": { "x": 36.63, "y": 49.8, "target": "power(3.3)", "tooltip": "3.3 V (for the button pull-up)" },
+    "GND.3": { "x": 39.17, "y": 49.8, "target": "GND" },
+
+    // internals: display (SPI)
+    "$gpio5": { "target": ["GPIO5", "lcd:SDA"] },
+    "$gpio6": { "target": ["GPIO6", "lcd:SCL"] },
+    "$gpio4": { "target": ["GPIO4", "lcd:DC"] },
+    "$gpio7": { "target": ["GPIO7", "lcd:CS"] },
+    "$gpio8": { "target": ["GPIO8", "lcd:RST"] },
+    "$gpio9": { "target": ["GPIO9", "lcd:BL"] },
+
+    // internals: shared I2C bus (touch 0x38, RTC 0x51, RFID 0x28) and touch interrupt
+    "$gpio11": { "target": ["GPIO11", "touch:SDA", "rtc:SDA", "rfid:SDA"] },
+    "$gpio12": { "target": ["GPIO12", "touch:SCL", "rtc:SCL", "rfid:SCL"] },
+    "$gpio14": { "target": ["GPIO14", "touch:INT"] },
+
+    // internals: encoder
+    "$gpio41": { "target": ["GPIO41", "enc:A"] },
+    "$gpio40": { "target": ["GPIO40", "enc:B"] },
+
+    // internals: supply; touch and RFID resets tied high as in sim/diagram.json
+    "$3v3": {
+      "target": ["power(3.3)", "lcd:VCC", "touch:VCC", "touch:RST", "rtc:VDD", "rfid:VCC", "rfid:RST", "enc:VCC"]
+    },
+    "$gnd": { "target": ["GND", "lcd:GND", "touch:GND", "rtc:VSS", "rfid:GND", "enc:GND"] }
+  },
+
+  "displays": [
+    {
+      // why square: wokwi-boards has no round display type; the 240x240 frame fills the
+      // square around the round window of board.svg, so its corners (hidden by the real,
+      // round glass) stay visible in the simulator
+      "id": "lcd",
+      "x": 6.3,
+      "y": 6.3,
+      "width": 32.4,
+      "height": 32.4,
+      "pixelWidth": 240,
+      "pixelHeight": 240,
+      "chip": "chip-gc9a01"
+    }
+  ]
+}

@@ -77,6 +77,33 @@ None. The chip has no interactive controls in the simulator UI. Configure it wit
 - wokwi-cli's `take-screenshot` reports "Part does not have a valid framebuffer" for this
   chip's display, so use `frameLog` in automated checks.
 
+## Use it in Wokwi
+
+Each release of this chip (a tag `vX.Y.Z` with the asset `chip.zip`, holding exactly
+`chip.json` and `chip.wasm`) can be loaded by any Wokwi project. Add the dependency and a part to
+the project's `diagram.json`:
+
+```json
+"dependencies": {
+  "chip-gc9a01": "github:beyonddemise/chip-gc9a01@0.1.0"
+}
+```
+
+```json
+{ "type": "chip-gc9a01", "id": "lcd", "top": 0, "left": 200, "attrs": {} }
+```
+
+[`example/diagram.json`](example/diagram.json) is a complete minimal project: a stock
+ESP32-S3-DevKitC-1 and this chip, nothing else.
+The example wires the panel to the ESP32-S3's default SPI pins (MOSI 11, SCK 12, CS 10)
+plus DC 9, RST 8 and BL 7. With M5GFX/LovyanGFX on the ESP32-S3 add `"readDummyBits": "0"`
+to the part's `attrs` (see Limitations).
+
+**Status:** `0.1.0` is a pre-release. The host unit test (`make test`) passes. The chip is part of the
+wokwi-cli automation scenarios of the [M5Dial demo](https://github.com/beyonddemise/M5Dial-UserDemo),
+but it has not yet been seen passing a Wokwi simulation: those scenarios are held up by
+[issue #39](https://github.com/beyonddemise/M5Dial-UserDemo/issues/39). Reports welcome.
+
 ## Build
 
 Needs [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) (tested with 34).
@@ -87,15 +114,14 @@ make WASI_SDK_PATH=/path/to/wasi-sdk zip    # dist/chip.zip (release payload)
 make test                                   # host unit test (native cc)
 ```
 
-Use it in `wokwi.toml`:
+To try a local build, point `wokwi.toml` at it and add a part of type `chip-gc9a01` to
+`diagram.json`:
 
 ```toml
 [[chip]]
 name = 'gc9a01'
 binary = 'path/to/dist/chip.wasm'
 ```
-
-Then add a part of type `chip-gc9a01` in `diagram.json`.
 
 `wokwi-api.h` is the unmodified Wokwi Chips API header (from wokwi.com/api/chips/wokwi-api.h).
 

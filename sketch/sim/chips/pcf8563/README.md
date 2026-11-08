@@ -60,6 +60,32 @@ None.
 - Invalid BCD values or dates are not rejected; they are normalised through the calendar arithmetic.
 - The clock follows simulation time, which may run slower or faster than wall time.
 
+## Use it in Wokwi
+
+Each release of this chip (a tag `vX.Y.Z` with the asset `chip.zip`, holding exactly
+`chip.json` and `chip.wasm`) can be loaded by any Wokwi project. Add the dependency and a part to
+the project's `diagram.json`:
+
+```json
+"dependencies": {
+  "chip-pcf8563": "github:beyonddemise/chip-pcf8563@0.1.0"
+}
+```
+
+```json
+{ "type": "chip-pcf8563", "id": "rtc", "top": 0, "left": 200, "attrs": {} }
+```
+
+[`example/diagram.json`](example/diagram.json) is a complete minimal project: a stock
+ESP32-S3-DevKitC-1 and this chip, nothing else.
+The example wires the clock to the ESP32-S3's default I2C pins (SDA 8, SCL 9) and `INT` to
+GPIO10; `INT` is open drain, so enable the MCU's pull-up (`INPUT_PULLUP`).
+
+**Status:** `0.1.0` is a pre-release. The host unit test (`make test`) passes. The chip is part of the
+wokwi-cli automation scenarios of the [M5Dial demo](https://github.com/beyonddemise/M5Dial-UserDemo),
+but it has not yet been seen passing a Wokwi simulation: those scenarios are held up by
+[issue #39](https://github.com/beyonddemise/M5Dial-UserDemo/issues/39). Reports welcome.
+
 ## Build
 
 Needs [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) (tested with 34).
@@ -70,15 +96,14 @@ make WASI_SDK_PATH=/path/to/wasi-sdk zip    # dist/chip.zip (release payload)
 make test                                   # host unit test (native cc)
 ```
 
-Use it in `wokwi.toml`:
+To try a local build, point `wokwi.toml` at it and add a part of type `chip-pcf8563` to
+`diagram.json`:
 
 ```toml
 [[chip]]
 name = 'pcf8563'
 binary = 'path/to/dist/chip.wasm'
 ```
-
-Then add a part of type `chip-pcf8563` in `diagram.json`.
 
 `wokwi-api.h` is the unmodified Wokwi Chips API header (from wokwi.com/api/chips/wokwi-api.h).
 
