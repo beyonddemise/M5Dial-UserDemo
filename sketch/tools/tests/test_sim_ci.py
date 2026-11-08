@@ -10,6 +10,10 @@ SIM_CI = os.path.join(os.path.dirname(__file__), "..", "sim_ci.sh")
 QUOTA = "Error: You have used up your Free plan monthly CI minute quota. Upgrade at wokwi.com"
 MISMATCH = "Error in step 2: expected 'boot: ok', got 'boot: fail'"
 TRANSPORT = "Error: Connection to transport closed unexpectedly: code 1006"
+# why: the free plan ends a session after 5 minutes of wall time; seen when Wokwi's emulated
+# Wi-Fi scan failed and the simulation slowed down (PR #53, run 42506866169)
+SESSION = ("API Error: Connection timed out after 5 minutes. Upgrade your plan at "
+           "https://wokwi.com/pricing for a longer timeout.")
 
 # why: the fake pops one "<rc>|<text>" line per call from $FAKE_DIR/responses and logs its args,
 # so a test scripts the exact wokwi-cli output sequence and can count invocations
@@ -78,8 +82,23 @@ class SimCiTest(unittest.TestCase):
         self.assertIn("::error::FAIL a.yaml (exit 1)", proc.stdout)
 
     def test_timeout_fails(self):
-        proc, _, _ = self.run_ci([(42, "Timeout: simulation did not finish")], [("A", "a.yaml")])
+        """A simulated-time timeout (exit 42) is a firmware result: failed, never retried."""
+        proc, calls, _ = self.run_ci([(42, "Timeout: simulation did not finish")], [("A", "a.yaml")])
         self.assertEqual(proc.returncode, 1)
+        self.assertEqual(len(calls), 1)
+
+    def test_session_timeout_retried_once_then_pass(self):
+        """Wokwi's 5-minute session limit is retried once; the retry's result counts."""
+        proc, calls, _ = self.run_ci([(1, SESSION), (0, "ok")], [("examples/A", "a.yaml")])
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("retrying once", proc.stdout)
+
+    def test_session_timeout_twice_fails(self):
+        """A scenario that outgrows the session every time still fails."""
+        proc, calls, _ = self.run_ci([(1, SESSION), (1, SESSION)], [("examples/A", "a.yaml")])
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(len(calls), 2)
 
     def test_transport_drop_retried_once_then_pass(self):
         proc, calls, _ = self.run_ci([(1, TRANSPORT), (0, "ok")], [("examples/A", "a.yaml")])

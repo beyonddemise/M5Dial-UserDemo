@@ -101,8 +101,8 @@ to the part's `attrs` (see Limitations).
 
 **Status:** `0.1.0` is a pre-release. The host unit test (`make test`) passes. The chip is part of the
 wokwi-cli automation scenarios of the [M5Dial demo](https://github.com/beyonddemise/M5Dial-UserDemo),
-but it has not yet been seen passing a Wokwi simulation: those scenarios are held up by
-[issue #39](https://github.com/beyonddemise/M5Dial-UserDemo/issues/39). Reports welcome.
+and those scenarios pass on Wokwi
+(since [PR #50](https://github.com/beyonddemise/M5Dial-UserDemo/pull/50)). Reports welcome.
 
 ## Build
 

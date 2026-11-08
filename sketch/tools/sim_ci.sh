@@ -7,6 +7,7 @@
 # Verdict per scenario:
 #   - pass (exit 0)                        -> "PASS <scenario>"
 #   - Wokwi transport drop (code 1006)     -> retried once; the retry's result counts
+#   - Wokwi session timeout (free plan: 5 min wall time) -> retried once, the same way
 #   - used-up Wokwi CI minute quota        -> SKIPPED, not failed: a billing condition, not a
 #     test result. Emits ::warning::, appends "SKIPPED (Wokwi quota): <scenario>" to
 #     $GITHUB_STEP_SUMMARY for this and every remaining scenario, and runs no more scenarios
@@ -53,6 +54,14 @@ while [ $# -gt 0 ]; do
     fi
     if [ "$rc" -ne 0 ] && [ "$attempt" -eq 1 ] && grep -q 'transport closed unexpectedly' "$out"; then
       echo "::warning::$scenario: Wokwi transport error 1006, retrying once"
+      continue
+    fi
+    # why: Wokwi ends a free-plan session after 5 minutes of wall time. Seen when its emulated
+    # Wi-Fi scan failed and the simulation slowed down (run 42506866169); the same scenario
+    # passed in the run before. A firmware hang still fails at once: it ends with exit 42 at the
+    # simulated-time limit (--timeout-ms), not with this message.
+    if [ "$rc" -ne 0 ] && [ "$attempt" -eq 1 ] && grep -q 'Connection timed out after 5 minutes' "$out"; then
+      echo "::warning::$scenario: Wokwi session timeout (5 min), retrying once"
       continue
     fi
     break

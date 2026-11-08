@@ -9,7 +9,7 @@
  *
  * M5DialDemo port: the blocking WIFI_COMMON_TEST::SCAN::scan() (NVS + netif + esp_wifi set up
  * and torn down per scan) replaced by an asynchronous WiFi.h scan polled in onRunning(); list
- * text, cap and scroll maths in wifi_list.h (host-tested); a touch rescans; M5Dial.update() in
+ * text, cap, scroll maths and the failed-poll recheck in wifi_list.h (host-tested); a touch rescans; M5Dial.update() in
  * the button and touch waits; M5_LOGI log lines (docs/PORTING_NOTES.md, "Wi-Fi scan").
  */
 #include "app_wifi_scan.h"
@@ -27,6 +27,8 @@ namespace {
 constexpr int32_t ANIM_MS = 600;           ///< original overshoot time of the list
 constexpr int32_t ANIM_START_Y = 100;      ///< original: the list slides in from 100 px down
 constexpr uint32_t TOUCH_POLL_MS = 5;      ///< original `while (isTouched()) delay(5)` pattern
+static_assert(wifi_list::SCAN_RUNNING == WIFI_SCAN_RUNNING, "WiFi.h scan codes changed");
+static_assert(wifi_list::SCAN_FAILED == WIFI_SCAN_FAILED, "WiFi.h scan codes changed");
 }  // namespace
 
 
@@ -56,15 +58,17 @@ void WiFi_Scan::_start_scan()
 
 void WiFi_Scan::_poll_scan()
 {
-    int16_t result = WiFi.scanComplete();
+    // why settled: one scanComplete() can report a finished scan as failed (wifi_list.h)
+    int result = wifi_list::settledScanResult([] { return (int)WiFi.scanComplete(); });
     if (result == WIFI_SCAN_RUNNING)
         return;
     _data.scanning = false;
 
     if (result < 0)
     {
-        // why: WIFI_SCAN_FAILED also covers the core's scan timeout
-        M5_LOGW("wifi: scan failed");
+        // why the status bits: WIFI_SCAN_FAILED also covers the core's scan timeout; the bits
+        // (BIT0 scanning, BIT1 done) tell a timeout from a lost scan-done event
+        M5_LOGW("wifi: scan failed (bits=0x%x)", (unsigned)WiFi.getStatusBits());
         _data.wifi_scan_result = "Scan failed\n";
     }
     else

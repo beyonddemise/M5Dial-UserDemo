@@ -1,0 +1,62 @@
+# UserDemo on the virtual M5Dial: launcher, TempDemo, touch select and the centre tap (RfidTest).
+# Run: tools/sim.sh UserDemo sim/scenarios/UserDemo/launcher_touch.test.yaml
+#
+# Parts and launcher slots: see launcher.test.yaml.
+#
+# why three files (launcher, launcher_apps, launcher_touch): one session for all apps needs
+# more than 20 s of simulated time and, at ~4 s of wall time per simulated second, more than
+# the free Wokwi plan's 5-minute session limit (PR #50, run 42501330101). Each file boots
+# again and stays well under both.
+name: 'UserDemo: launcher touch'
+version: 1
+steps:
+  # --- plain boot (no button hold): straight to the launcher
+  # why no hold any more: holding the button > 1 s at boot now enters the factory test, which
+  # ends with a power-off (covered by enter/skip_io/io_leds.test.yaml in their own sessions).
+  # wait-serial cannot assert that no `factory:` line came; the device smoke covers that:
+  #   device_test.py UserDemo --expect 'boot: UserDemo' 'launcher: ready' --forbid 'factory:'
+  - wait-serial: 'boot: UserDemo'
+  - wait-serial: 'launcher: ready'
+
+  # why edgeIntervalUs 40 ms: a slow, unambiguous turn, one launcher step per detent
+  - set-control: { part-id: enc, control: edgeIntervalUs, value: 40000 }
+  # --- TempDemo: six detents from slot 0 to slot 6, open, one warmer step, quit
+  - set-control: { part-id: enc, control: steps, value: 6 }
+  - wait-serial: 'launcher: select 6 TempDemo'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: open TempDemo'
+  - wait-serial: 'temp: target=22'
+  - wait-serial: 'temp: frame'
+  - set-control: { part-id: enc, control: steps, value: 1 }
+  - wait-serial: 'temp: target=23'
+  - set-control: { part-id: enc, control: steps, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close TempDemo'
+  - wait-serial: 'launcher: ready'
+
+  # --- touch an icon: selects it (icon 2 RfidTest at (149, 210), launcher_layout::ringPoint)
+  - set-control: { part-id: touch, control: x, value: 149 }
+  - set-control: { part-id: touch, control: y, value: 210 }
+  - set-control: { part-id: touch, control: touched, value: 1 }
+  - wait-serial: 'launcher: select 2 RfidTest'
+  - set-control: { part-id: touch, control: touched, value: 0 }
+  # why 400 ms: the centre tap only opens once the 300 ms selector animation has finished
+  - delay: 400ms
+
+  # --- touch the centre circle: opens the selected app (RFID_Test), a click quits back
+  - set-control: { part-id: touch, control: x, value: 120 }
+  - set-control: { part-id: touch, control: y, value: 120 }
+  - set-control: { part-id: touch, control: touched, value: 1 }
+  - wait-serial: 'app: open RFID_Test'
+  - wait-serial: 'rfid: ready'
+  - set-control: { part-id: touch, control: touched, value: 0 }
+  - set-control: { part-id: btn, control: pressed, value: 1 }
+  - delay: 200ms
+  - set-control: { part-id: btn, control: pressed, value: 0 }
+  - wait-serial: 'app: close RFID_Test'
+  - wait-serial: 'launcher: ready'

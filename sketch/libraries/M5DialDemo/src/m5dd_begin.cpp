@@ -97,6 +97,11 @@ void sim_disable_speaker(m5::M5Unified::config_t& cfg) {
 
 namespace m5dd {
 
+/**
+ * See m5dd_begin.h. Implementation notes: in the sim build (-DM5DD_SIM) the panel MISO route and
+ * the silent speaker are applied before M5Dial.begin(); the RFID reader is initialised only if it
+ * answers the probe.
+ */
 void begin(const char* sketchName) {
 #ifdef M5DD_SIM
     sim_route_panel_miso();

@@ -81,3 +81,25 @@ HOST_TEST(wifi_list_line_never_contains_an_extra_newline) {
     std::string line = formatLine(0, -50, "two\nrows");
     HT_EQ(0, std::strcmp("0. (-50) two?rows\n", line.c_str()));
 }
+
+HOST_TEST(wifi_failed_poll_is_read_again_once) {
+    // the race: the first read says FAILED, the scan-done handler has finished by the second
+    int reads = 0;
+    int counts[] = {SCAN_FAILED, 1};
+    HT_EQ(1, settledScanResult([&] { return counts[reads++]; }));
+    HT_EQ(2, reads);
+
+    // a real failure stays a failure after the one extra read
+    reads = 0;
+    HT_EQ(SCAN_FAILED, settledScanResult([&] { reads++; return SCAN_FAILED; }));
+    HT_EQ(2, reads);
+}
+
+HOST_TEST(wifi_running_or_finished_poll_is_read_once) {
+    int reads = 0;
+    HT_EQ(SCAN_RUNNING, settledScanResult([&] { reads++; return SCAN_RUNNING; }));
+    HT_EQ(1, reads);
+    reads = 0;
+    HT_EQ(0, settledScanResult([&] { reads++; return 0; }));
+    HT_EQ(1, reads);
+}

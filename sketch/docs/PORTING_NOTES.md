@@ -469,7 +469,7 @@ Class `WiFi_Scan`, sketch `examples/WifiScan`, Task 12.
 | `!encoder.btn.read()` + hold loop → quit | `m5dd::buttonClicked()` → quit (unchanged behaviour) |
 | no rescan | **new:** a touch on the screen rescans once the finger is lifted |
 | `onDestroy`: log only (Wi-Fi was already torn down per scan) | `WiFi.scanDelete()` + `WiFi.mode(WIFI_OFF)` (stops and deinits the driver), then `wifi: heap=<free internal>` |
-| `_log("get wifi num: %d")`, `printf(result)` | `app: open WiFi_Scan`, `wifi: scan`, `wifi: ap_count=<n>`, `wifi: <rssi> <ssid>` per listed AP, `wifi: scan failed` (warning), `wifi: heap=<n>`, `app: close WiFi_Scan` |
+| `_log("get wifi num: %d")`, `printf(result)` | `app: open WiFi_Scan`, `wifi: scan`, `wifi: ap_count=<n>`, `wifi: <rssi> <ssid>` per listed AP, `wifi: scan failed` (warning; from a poll with ` (bits=<hex>)`), `wifi: heap=<n>`, `app: close WiFi_Scan` |
 
 - **Rescan on touch, not on the button:** upstream the button click quits and nothing rescans.
   The plan asked for "a press triggers a rescan"; giving the button press to the rescan would
@@ -478,6 +478,16 @@ Class `WiFi_Scan`, sketch `examples/WifiScan`, Task 12.
 - **Asynchronous scan:** the original blocked `onCreate()` for the whole scan, so the app could
   not quit until it finished. The port shows "Scanning..." and keeps the button responsive;
   knob turns during a scan are dropped.
+- **A failed poll is read again once** (`wifi_list::settledScanResult()`, host-tested). Core
+  3.3.10's `WiFiScanClass::scanComplete()` tests `WIFI_SCAN_DONE_BIT` and `WIFI_SCANNING_BIT` in
+  two separate reads. If the scan-done handler (event task) sets DONE and clears SCANNING between
+  them, a finished scan returns `WIFI_SCAN_FAILED`; the second read then sees DONE. Wokwi's
+  timing hit this in some runs (PR #53, CI runs 42506866169 and 42510727429). Within a run it was
+  repeatable to the millisecond, so a scenario retry didn't help. A diagnostic build logged
+  `wifi: scan failed (-2, bits=0x2)` showed DONE set right after the "failure". Upstream's blocking
+  scan waited on the DONE bit and never saw this. After such a failure the scenario waited for
+  `ap_count=` while the app redrew its page every loop (about 1.5 s of wall time per frame in
+  Wokwi), so it ran into the free plan's 5-minute session limit, not the 20 s timeout.
 - **Heap:** the scan records are freed with `WiFi.scanDelete()` as soon as the list text is
   built; `WIFI_OFF` on close returns the driver's memory, so repeated open/close does not leak.
   `wifi: heap=` is logged after `WIFI_OFF` for MemSoak. The list itself is at most 10 lines.
@@ -543,8 +553,8 @@ Class `MoreMenu`, launcher slot 7, Task 14.
 - **Button edge:** the click that opened the menu cannot also choose Quit.
 - **Scenarios:** `sim/scenarios/UserDemo/more_menu_quit.test.yaml` (Quit → `app: close MoreMenu`
   → `launcher: ready`) and `power_off.test.yaml` (`power: off`; the sim ending there is accepted).
-  Each is its own Wokwi session, because a power-off ends the boot. Not yet seen passing on
-  Wokwi (the scenario hang is #39); the 300/400/500 ms settle delays are estimates.
+  Each is its own Wokwi session, because a power-off ends the boot. Both pass on Wokwi (PR #50,
+  run 42501330101) with the 300/400/500 ms settle delays as written.
 
 ### Memory soak (`examples/MemSoak`)
 
@@ -659,8 +669,7 @@ button that toggles the arc colour. Logs `lvgl: ready`, `lvgl: value=<n>` on eve
   The arc starts focused in edit mode; a knob press leaves edit mode, so the knob can then focus
   the button.
 - **Not verified yet:** `sim/scenarios/LvglDemo/knob.test.yaml` (boot, `lvgl: ready`, CW x5 →
-  `value=5`, CCW → `value=4`) has not yet passed on Wokwi (#39), and the sketch has not run on
-  the device. Colours, RGB565 byte order and the touch mapping are unchecked on a real panel.
+  `value=5`, CCW → `value=4`) passes on Wokwi (PR #50); the sketch has not run on the device. Colours, RGB565 byte order and the touch mapping are unchecked on a real panel.
 
 ### DialProbe
 
@@ -946,10 +955,13 @@ Everything below is listed with its exact check in [TEST_CHECKLIST.md](TEST_CHEC
   encoder direction on the real knob, MemSoak min heap, BLE with `ble_check.py`, More → Power Off
   on USB power, factory RTC wake-up, LvglDemo colours/byte order/touch, `Ex_I2C` scan time on a
   bare Port A.
-- **Scenarios not yet seen passing** (first real run PR #38; the hang is #39): every scenario written since Task 7, including
-  `more_menu_quit`, `power_off`, the factory `enter`/`skip_io`/`io_leds`, LvglDemo `knob`. Their
-  settle delays are estimates; they also assume `wait-serial` consumes the stream in order and
-  that `steps: 0` stops a running encoder burst.
+- **Scenarios** pass on Wokwi since the #39 fix (PR #50: CI run 42501330101 passed 13 of 14; the
+  14th, the one-session launcher run, outgrew the free plan's 5-minute session and was split into
+  `launcher`, `launcher_apps` and `launcher_touch`, each passing on its own). The settle delays
+  work as written; they still rely on `wait-serial` consuming the stream in order and on each
+  encoder burst finishing before the scenario sets the next `steps` value. `steps: 0` only
+  re-arms the control (the chip's `on_poll` returns without touching `pending`); it does not
+  cancel detents still queued.
 - **Sim assumptions:** whether NimBLE init returns in Wokwi; `io_leds` assumes Wokwi's ADC reads
   < 100 mV at pot position 0 and ≥ 2600 mV at position 1; the RFID chip resets a card to IDLE when
   `cardPresent` goes to 0. (Settled since: the Wokwi ESP32-S3 boots the 8 MB merged image only
