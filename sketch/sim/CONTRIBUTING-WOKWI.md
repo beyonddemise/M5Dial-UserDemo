@@ -83,10 +83,17 @@ Instead of step 3 you can download the `<chip>-chip` artefact of the `wokwi-chip
 Check it: open a new ESP32-S3 project on wokwi.com, paste the chip's `example/diagram.json`
 and start the simulation; the chip must load without errors (browser console).
 
-**Later versions:** change the chip here, merge to `main`, then repeat steps 1, 3 and 4 with
-the next tag (`v0.1.1`, ...) and push with `git push <repo-url> split/chip-$chip:main` (the
-split is deterministic, so the push fast-forwards). Bump the version in the chip's
-`README.md` and `example/diagram.json`, and in `board-m5dial/board.json`, in the same change.
+**Later versions** (each chip has its own version):
+
+1. Change the chip here and, in the same PR, set its new version (e.g. `0.1.1`) in the
+   chip's `example/diagram.json` dependency, its `README.md` and its entry in
+   `board-m5dial/board.json`. The tests take each chip's version from its example and fail
+   if the README or board names another; the other chips keep theirs.
+2. After the merge to `main`, repeat step 1 (split) and push the split branch with
+   `git push https://github.com/beyonddemise/chip-$chip.git split/chip-$chip:main` (the split
+   is deterministic, so the push fast-forwards). Push **before** the release: `--target main`
+   tags the repo's current `main`, which must be the commit the payload was built from.
+3. Then steps 3 and 4 with the new tag (`gh release create v0.1.1 ...`).
 
 ## Route 2: the M5Dial board (pull request to wokwi/wokwi-boards)
 

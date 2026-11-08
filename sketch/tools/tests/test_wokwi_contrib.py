@@ -31,7 +31,6 @@ CONTRIBUTING = os.path.join(SIM, "CONTRIBUTING-WOKWI.md")
 WASI_SDK = os.path.join(TOOLS, "wasi-sdk")
 
 OWNER = "beyonddemise"
-VERSION = "0.1.0"
 DEVKIT = "board-esp32-s3-devkitc-1"
 # why: a pinned action is a full commit SHA; a tag (v4) can be moved to other code
 PINNED_USES = re.compile(r"^[\w.-]+/[\w./-]+@[0-9a-f]{40}$")
@@ -40,9 +39,23 @@ CHIP_TYPE = re.compile(r"^github:(?P<owner>[\w-]+)/chip-(?P<name>[\w-]+)@(?P<ver
 MCU_TARGET = re.compile(r"^(GPIO([0-9]|[1-3][0-9]|4[0-8])|GND|power\((3\.3|5)\)|NRST)$")
 
 
+def chip_version(chip):
+    """The release version a chip's example/diagram.json loads, e.g. "0.1.0".
+
+    why the example as the source: each chip is released on its own, so versions differ per
+    chip; the README and board.json must name the same one (CONTRIBUTING-WOKWI.md).
+    """
+    with open(os.path.join(CHIPS_DIR, chip, "example", "diagram.json")) as f:
+        dep = json.load(f)["dependencies"]["chip-" + chip]
+    m = CHIP_TYPE.match(dep)
+    if not m or m["name"] != chip:
+        raise ValueError(f"{chip}: example dependency {dep!r} is not github:<owner>/chip-{chip}@x.y.z")
+    return m["ver"]
+
+
 def dependency(chip):
     """The `dependencies` value that loads `chip` from its release (see CONTRIBUTING-WOKWI.md)."""
-    return f"github:{OWNER}/chip-{chip}@{VERSION}"
+    return f"github:{OWNER}/chip-{chip}@{chip_version(chip)}"
 
 
 def chip_pins(chip):
