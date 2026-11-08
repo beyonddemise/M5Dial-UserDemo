@@ -6,3 +6,6 @@ managed_components
 
 # Local agent working folders (worktrees, scratch builds) - never part of the repo
 /.superpowers
+
+# Local copies of files git removed from the tree - never part of the repo
+/.backup

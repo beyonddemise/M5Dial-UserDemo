@@ -1,6 +1,0 @@
-{
-  "name": "PCF8563",
-  "author": "Stephan Wissel",
-  "pins": ["INT", "SCL", "SDA", "CLKOUT", "VDD", "VSS"],
-  "controls": []
-}

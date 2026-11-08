@@ -69,5 +69,22 @@ class RepoTreeTest(unittest.TestCase):
         os.symlink(os.path.join(tmp.name, "shared"), os.path.join(tmp.name, ".superpowers"))
         self.assertTrue(_ignored(tmp.name, ".superpowers"))
 
+    def test_backup_folder_is_ignored(self):
+        # why: .backup holds local copies of files git removed from the tree; never re-add them
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        subprocess.run(["git", "init", "-q", "--template=", tmp.name], check=True)
+        shutil.copy(os.path.join(REPO, ".gitignore"), tmp.name)
+        os.mkdir(os.path.join(tmp.name, ".backup"))
+        self.assertTrue(_ignored(tmp.name, ".backup/scratch-ctags"))
+
+    def test_repo_tracks_no_chip_build_output(self):
+        # why: every `make` / `make test` rewrites sim/chips/*/dist (wasm, zip, host_test), so a
+        # tracked copy leaves the tree dirty after each test run; the Makefiles re-create it
+        out = subprocess.run(["git", "-C", REPO, "ls-files", "sketch/sim/chips"],
+                             capture_output=True, text=True, check=True).stdout
+        self.assertEqual([], [p for p in out.splitlines() if "/dist/" in p])
+
+
 if __name__ == "__main__":
     unittest.main()
