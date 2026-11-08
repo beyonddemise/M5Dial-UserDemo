@@ -414,6 +414,18 @@ class ContributingDocTest(unittest.TestCase):
             with self.subTest(chip=chip):
                 self.assertIn(f"chip-{chip}", text)
 
+    def test_push_authenticates_through_gh(self):
+        """The push in the release block works without a git credential helper set up.
+
+        why: the first real release (chip-encoder v0.1.0) stopped at `git push https://...` with
+        "could not read Username"; gh is the one tool the block already needs logged in.
+        """
+        with open(CONTRIBUTING) as f:
+            pushes = [line for line in f if line.lstrip().startswith("git") and " push " in line]
+        self.assertEqual(1, len(pushes))
+        self.assertIn("-c credential.helper= -c 'credential.helper=!gh auth git-credential' push",
+                      pushes[0])
+
 
 if __name__ == "__main__":
     unittest.main()
