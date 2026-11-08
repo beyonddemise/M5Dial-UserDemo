@@ -31,6 +31,25 @@ inline int listedCount(int scanResult) {
     return scanResult > MAX_LISTED ? MAX_LISTED : scanResult;
 }
 
+constexpr int SCAN_RUNNING = -1;  ///< WiFi.h WIFI_SCAN_RUNNING
+constexpr int SCAN_FAILED = -2;   ///< WiFi.h WIFI_SCAN_FAILED
+
+/**
+ * Polls a scan once more when the first poll says SCAN_FAILED.
+ * why: arduino-esp32's WiFiScanClass::scanComplete() (core 3.3.10) tests WIFI_SCAN_DONE_BIT and
+ * WIFI_SCANNING_BIT in two separate reads. When the scan-done handler (event task) sets DONE and
+ * clears SCANNING between them, a finished scan reads as SCAN_FAILED; the second poll then sees
+ * DONE. Wokwi's timing hit this in some runs (PR #53: `scan failed (-2, bits=0x2)`, DONE set).
+ * @param poll returns WiFi.scanComplete()
+ * @return the AP count, SCAN_RUNNING, or SCAN_FAILED when both polls say so
+ */
+template <typename Poll>
+inline int settledScanResult(Poll poll) {
+    int result = poll();
+    if (result == SCAN_FAILED) result = poll();
+    return result;
+}
+
 /**
  * SSID with every ASCII control byte (0x00-0x1F, 0x7F) replaced by '?', for the serial log and
  * the list.

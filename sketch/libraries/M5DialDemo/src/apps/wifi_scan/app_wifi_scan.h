@@ -54,7 +54,8 @@ namespace MOONCAKE
          * text is built, and Wi-Fi is switched off on close, so repeated opens do not leak.
          *
          * Log lines: `app: open WiFi_Scan`, `wifi: scan`, `wifi: ap_count=<n>` and
-         * `wifi: <rssi> <ssid>` per listed network (or `wifi: scan failed`),
+         * `wifi: <rssi> <ssid>` per listed network (or `wifi: scan failed`, from a
+         * poll with ` (bits=<hex>)`),
          * `wifi: heap=<free internal bytes>` after Wi-Fi is off, `app: close WiFi_Scan`.
          * User data: AppContext* (set with setUserData() before onSetup()).
          */

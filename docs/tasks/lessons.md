@@ -80,7 +80,10 @@
   restarting its scenario run) was stranded the same way.
 - **Rule:** before every push to a PR branch, check `gh pr view <n> --json state` is `OPEN`. If
   it was merged, put the commits on a new branch from `origin/main` and open a follow-up PR that
-  names the merged one; never push to the deleted branch name.
+  names the merged one; never push to the deleted branch name. After the push, check the state
+  again: if it merged in between, confirm the merged main contains the pushed commit
+  (`git merge-base --is-ancestor <sha> origin/main`) before resolving any review thread as
+  fixed, and move what is missing to a follow-up PR.
 - **Also:** a stale build output can be newer than its source (a tracked `dist/` gets a fresh
   checkout time), so `make` skips the rebuild. That hid a Wokwi schema change until #48
   untracked `dist/`; `make zip` now always rebuilds.
